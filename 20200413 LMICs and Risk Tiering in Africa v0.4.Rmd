@@ -1,0 +1,2258 @@
+---
+title: "SARS-CoV-2 and LMICs: Risk Tiering in Africa v0.4"
+author: "Benny Rice"
+date: "4/23/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, eval = FALSE)
+```
+
+***
+<style>
+div.blue { background-color:#e6f0ff; border-radius: 5px; padding: 20px;}
+</style>
+<div class = "blue">
+
+## HEADER INFO
+
+- Metcalf Lab | Department of Ecology and Evolutionary Biology | Princeton University
+- April 2020
+- Code associated with project aimed at predicting COVID-19 burden in LMICs, in particular sub-Saharan Africa
+- Apologies in advance for amateurish code (ie all the loops and clunkiness)
+
+
+</div>
+
+***
+
+##### (i) SET UP
+
+Defining main working directory, loading necessary packages
+```{r define mainDir + packages, echo = FALSE, eval = TRUE, message = FALSE}
+mainDir <- '/Users/blrice/Dropbox/Lab Projects/1 Post Doc/9 THE RONA/LMICs and Risk Tiering in Africa/Code/'
+library(tidyverse)
+library(RJSONIO)      #Retrieving coordinates of cities from text strings by searching OpenStreetMap
+library(kableExtra)   #For printing tables in R markdown
+library(knitr)        #For printing tables in R markdown
+library(rgho)         #Querying the WHO GHO database
+library(reshape2)     #Melting data frames as needed
+library(ggrepel)      #Plotting country names neatly
+```
+
+***
+
+##### (ii) OUTLINE
+
+1. Retrieving coordinates of selected cities
+2. Retrieving publically available data from WHO, World Bank, UNDP, etc
+3. 
+
+***
+
+##### (iii) Notes on versions:
+
+- v0.1: Setting up R markdown document; adding code to retrieve GPS coordinates
+- v0.2: Starting to add code to download data from the WHO GHO database and World Bank
+- v0.3: Fleshing out the code to download WHO GHO and World Bank data, adding code to process UNDP data
+
+***
+
+
+
+
+
+
+
+***
+
+<style>
+div.blue { background-color:#e6f0ff; border-radius: 5px; padding: 20px;}
+</style>
+<div class = "blue">
+
+### Section 1 | Retrieving coordinates of selected cities
+
+</div>
+
+***
+
+
+
+
+
+
+
+##### Notes:
+
+- Benny Rice | 2020 04 13
+- Using the RJSONIO package to process openstreetmap data pulled from online in RJSON format
+- Note this takes approx. 1 min to run, so skipped if already have coordinates for selected cities
+  - To run this code in the R markdown document, flip `eval = FALSE` to `eval = FALSE`
+
+***
+
+##### (1.01) Selecting cities in sub-Saharan Africa to include in provisional list
+
+**Criteria: Cities were include if they were**
+
+**(1)** The argest city in each of the 48 countries in the sub-Saharan African region as defined by [UN Stats](https://unstats.un.org/unsd/methodology/m49/)
+
+**(2)** Any of the 25 largest cities or urban agglomerations in SSA not already in the above list. Provisionally these were pulled from [Wikipedia](https://en.wikipedia.org/wiki/List_of_urban_agglomerations_in_Africa)
+
+This added the cities:
+
+1. Lubumbashi, Democratic Republic of the Congo
+2. Kumasi, Ghana
+3. Abuja, Nigeria
+4. Kano, Nigeria
+5. Ibadan, Nigeria
+6. Port Harcourt, Nigeria
+7. Cape Town, South Africa
+8. Durban, South Africa
+9. Pretoria, South Africa
+
+**(3)** Any cities in SSA not already in the above list that had an airport among the 30 busiest (in terms of passengers per year) in Africa. Provisionally these were pulled from [Wikipedia](https://en.wikipedia.org/wiki/List_of_the_busiest_airports_in_Africa)
+
+This added the cities:
+
+1. Port Elizabeth, South Africa
+
+##### For a total of 58 cities selected
+
+***
+
+##### (1.02) If needed, reading in from a csv with columns for `City` and `Country` and finding associated coordinates
+
+(1.02.01) Reading in a csv
+```{r 1.02.01, echo = FALSE, eval = FALSE}
+# filename.cities_list <- "20200413 cities list_provisional.csv"
+# df.cities_list <- read.csv(file.path(mainDir, filename.cities_list), stringsAsFactors = FALSE)
+```
+
+(1.02.02) Writing a function `function.get_coords` that takes a data frame with columns for `City` and `Country`. Note the need to specify the country as in some cases searches with city names result in multiple cities from different countries
+```{r 1.02.02, echo = FALSE, eval = FALSE}
+#Defining function.get_coords that takes a data frame as input
+#url = "http://nominatim.openstreetmap.org/search?city="+CityName+"&country="+CountryName+"&limit=9&format=json"
+function.get_coords <- function(in.df){
+  v.lats <- rep(NA, length(in.df$City))
+  v.lons <- rep(NA, length(in.df$City))
+  for(i in 1:length(in.df$City)){
+    url <- paste(
+      "http://nominatim.openstreetmap.org/search?",
+      "city=",
+      #Using gsub to replace spaces with "%20"
+      gsub(' ', '%20', in.df$City[i]),
+      "&country=",
+      gsub(' ', '%20', in.df$Country[i]),
+      "&limit=9&format=json",
+      sep="")
+    x <- fromJSON(url)
+    v.lats[i] <- x[[1]]$lat
+    v.lons[i] <- x[[1]]$lon
+  }
+  out.df <- data.frame(Country = in.df$Country, City = in.df$City, Latitude = v.lats, Longitude = v.lons)
+  #Output a dataframe with latitude and longitude columns appended
+  return(out.df)
+}
+```
+
+(1.02.03) Calling `function.get_coords` on selected cities
+
+Note this takes surprisingly long (maybe from having to load 58 webpages? maybe from the silly loop? who knows): Takes approx. 60 seconds
+```{r 1.02.03, echo = FALSE, eval = FALSE}
+# df.cities_list_w_coords <- function.get_coords(df.cities_list)
+```
+
+(1.02.04) Printing the list of cities and coordinates as a table for a sanity check
+```{r 1.02.04, echo = FALSE, eval = FALSE}
+# kable(df.cities_list_w_coords, caption = "Selected cities and coordinates") %>% 
+#   kable_styling(bootstrap_options = c("striped", "hover"), font_size = 10) %>% 
+#   scroll_box(width = "100%", height = "300px")
+```
+
+(1.02.05) If needed, exporting as a CSV
+```{r 1.02.05, echo = FALSE, eval = FALSE}
+# write.csv(df.cities_list_w_coords, "20200413 cities list_provisional_w_coords.csv", row.names=FALSE)
+```
+
+***
+
+##### (1.03) If available, reading in a previously made csv with `Latitude` and `Longitude` data for select cities
+
+(1.03.01) Reading in csv
+```{r 1.03.01, echo = FALSE, eval = TRUE}
+filename.cities_list_w_coords <- "20200413 cities list_provisional_w_coords.csv"
+df.premade_cities_list_w_coords <- read.csv(file.path(mainDir, filename.cities_list_w_coords), stringsAsFactors = FALSE)
+```
+
+(1.03.02) Printing a table of cities and coordinates
+```{r 1.03.02, echo = FALSE, eval = TRUE}
+kable(df.premade_cities_list_w_coords, caption = "Selected cities and coordinates") %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"), font_size = 10) %>% 
+  scroll_box(width = "100%", height = "300px")
+```
+
+***
+
+##### (1.04) Plotting selected cities on a map
+```{r 1.04, echo = FALSE, eval = TRUE, fig.height = 7, fig.width = 10}
+#Cleaning up country names to match map_data()
+v.Countries <- unique(df.premade_cities_list_w_coords$Country)
+v.Countries[v.Countries == "Congo"]         <- "Republic of Congo"
+v.Countries[v.Countries == "Cote d'Ivoire"] <- "Ivory Coast"
+v.Countries[v.Countries == "Eswatini"]      <- "Swaziland"
+#Getting the map data for SSA countries
+Africa <- map_data("world", region = v.Countries)
+#Plotting the map
+ggplot() + 
+  geom_polygon(data = Africa, aes(x=long, y = lat, group = group)) + 
+  coord_fixed(1) +
+  geom_point(data = df.premade_cities_list_w_coords, 
+             aes(x = Longitude, y = Latitude), 
+             color = "yellow", size = 1, shape = 1) +
+  theme(panel.grid = element_blank(),
+        axis.title.x = element_blank(), axis.text.x = element_blank(),
+        axis.title.y = element_blank(), axis.text.y = element_blank(),
+        panel.background = element_rect(fill = "white"))
+```
+
+
+***
+***
+
+<style>
+div.blue { background-color:#e6f0ff; border-radius: 5px; padding: 20px;}
+</style>
+<div class = "blue">
+
+### Section 2 | Retrieving publically available data on relevant indicators
+
+</div>
+
+***
+
+##### Notes:
+
+- Benny Rice | 2020 04 18
+- Using the [rgho package](https://rdrr.io/cran/rgho/f/README.md) to search for reference codes in the WHO GHO database 
+- Generating URLs to download data from online databases using the corresponding reference codes 
+
+***
+
+##### (2.01) Data Sources
+
+Potentially relevant indicators were identified from:
+
+1. The World Health Organization (WHO) Global Health Observatory (GHO) [indicators](https://www.who.int/data/gho/data/indicators)
+2. World Bank [indicators](https://data.worldbank.org/indicator?tab=all)
+3. United Nations Development Programme (UNDP) Human Development Data [indicators](http://hdr.undp.org/en/data)
+4. WorldPop
+5. etc
+
+- The list of indicators (across all fields) were scanned for those with potential relevance to aspects of healthcare capacity, comorbidities, and potential risk factors pertinent to SARS-CoV-2
+  - An initial list `241` indicators was identified on `13 April 2020`
+  - Of these, a subset of `45` indicators hypothesized to have the most direct relevance for SARS-CoV-2 risk were identified on `16 April 2020`
+    - Reference codes specifying the data sets' name and location within overall databases were obtained
+    - Using the reference codes, the data sets' for these `45` indicators were downloaded on `18 April 2020`
+- Indicators are listed in file `20200418 Publically available data.csv` with descriptions and URLs linking to the data sources
+
+***
+
+##### (2.02) Obtaining reference codes needed to download data from sources
+
+(2.02.01) Reference codes for WHO GHO Data
+
+Using the `rgho` package to identify reference codes in the WHO GHO database
+```{r 2.02.01, echo = FALSE, eval = TRUE}
+# rgho package: https://rdrr.io/cran/rgho/f/README.md
+
+#rgho vignettes available:
+# vignette("a-intro", "rgho")
+# vignette("b-dimensions", "rgho")
+
+#List all codes:
+# vignette("c-codes-gho", "rgho")
+```
+
+(2.02.02) Writing custom functions to use `search_codes()` and `get_gho_data()` the `rgho` package
+```{r 2.02.02, echo = FALSE, eval = TRUE}
+#search_txt specifies a text string search term(s): "handwashing" shown as an example below
+
+#Writing a function to display the search hits along with numbers of data rows and columns
+functon.search_hits <- function(search_txt){
+  #Again search_codes() to search the GHO repository
+  search_results <- search_codes(search_txt, dimension = "GHO")
+  #Extracting "label", and "code" to make a table summarizing search results
+  #Note that search queries often return multiple hits
+  attr.labels    <- attributes(search_results)
+  v.labels       <- attr.labels$label
+  attr.codes     <- attr(search_results, 'attrs')
+  v.codes        <- attr.codes$code
+  #Downloading data with the get_gho_data() function
+  #Inputting a vector containing search results codes
+  n_data_rows <- rep(NA, length(v.codes))
+  n_data_cols <- rep(NA, length(v.codes))
+  for(i in 1:length(v.codes)){
+    v.dims <- dim(get_gho_data(dimension = "GHO", code = v.codes[i]))
+    n_data_rows[i] <- v.dims[1]
+    n_data_cols[i] <- v.dims[2]
+  }
+  df.search_hits <- data.frame(
+    hit_num     = 1:length(v.codes),
+    label       = v.labels, 
+    code        = v.codes,
+    n_data_cols = n_data_cols,
+    n_data_rows = n_data_rows
+  )
+  return(df.search_hits)
+}
+
+#Writing a function to get the data for each search result and store as a list
+functon.get_gho_data <- function(search_txt){
+  #search_codes() to search the GHO repository
+  search_results <- search_codes(search_txt, dimension = "GHO")
+  #Search results are outputted as gho objects - atomic vectors with attributes
+  #Extracting "code" to input to get_gho_data() to download data
+  #Note that search queries often return multiple hits
+  attr.codes     <- attr(search_results, 'attrs')
+  search_results.codes <- attr.codes$code
+  #Downloading data with the get_gho_data() function
+  #Inputting a vector containing search results codes
+  #Outputting a list of dataframes
+  l.search_results <- list()
+  for(i in 1:length(search_results.codes)){
+    l.search_results[[i]] <- get_gho_data(dimension = "GHO", code = search_results.codes[i])
+  }
+  return(l.search_results)
+}
+```
+
+***
+
+(2.02.03) Using `handwashing` as an example
+```{r 2.02.03, echo = FALSE, eval = TRUE}
+#Specify text string search term(s): "handwashing" shown for example
+# search_txt <- "handwashing"
+
+#Calling functon.search_hits to functon.get_gho_data to download the WHO GHO data and store as a list
+# df.search_hits   <- functon.search_hits(search_txt)
+# l.search_results <- functon.get_gho_data(search_txt)
+```
+
+(2.02.04) Reviewing the `search_hits` for  Reviewing the search_hits 
+```{r 2.02.04, echo = FALSE, eval = TRUE}
+# kable(df.search_hits, caption = "Table 2.02.4A: Search hits for `handwashing`") %>% 
+#   kable_styling(bootstrap_options = c("striped", "hover"), font_size = 10)
+```
+
+***
+
+(2.02.04) Data for the selected search hit for `handwashing` (here hit 4 is the only hit with more than 10 data rows)
+
+```{r 2.02.05, echo = FALSE, eval = TRUE}
+#Reviewing data for the selected search hit (hit 4)
+# df.search_results4 <- l.search_results[[4]]
+# df.search_results4 <- df.search_results4[order(df.search_results4$REGION, df.search_results4$COUNTRY),]
+# kable(df.search_results4, caption = "Table 2.02.4B: Population with basic handwashing facilities at home (%)") %>% 
+#   kable_styling(bootstrap_options = c("striped", "hover"), font_size = 8) %>% scroll_box(width = "100%", height = "300px")
+```
+
+***
+
+
+
+
+***
+
+<style>
+div.blue { background-color:#e6f0ff; border-radius: 5px; padding: 20px;}
+</style>
+<div class = "blue">
+
+### Section 3 | Downloading and cleaning WHO, World Bank, and UNDP data sets
+
+</div>
+
+***
+
+
+***
+
+**Note** if a previously generated csv file containing cleaned data for WHO, World Bank, and UNDP indicators is available, one can proceed to Step 12 below
+
+***
+
+Once the corresponding `reference_code` is determined, one can download data directly by generating a `download_URL`
+
+- Given a known `reference_code`, the `download_URL` to download data from APIs is given by:
+  - For WHO GEO: 
+    - `https://apps.who.int/gho/athena/api/GHO/`  + `reference_code` + `?format=csv`
+  - For World Bank:
+    - `http://api.worldbank.org/v2/en/indicator/` + `reference_code` + `?downloadformat=csv`
+  - For UNDP:
+    - Necessary to manually download the data by clicking download CSV on the website
+    
+- Reference codes were determined for each of the `45` indicators hypothesized to have direct relevance for SARS-CoV-2 risk that were identified on `16 April 2020` and downloaded on `23 April 2020`
+    - Reference codes were stored in `20200424 Publically available data.csv`
+    - All cleaned data was stored as `ALL_2020_04_24_bound_all_WHO_WBK_UNDP_indicators.csv`
+  - Of these, `27` indicators with mostly complete data and the most direct relevance for SARS-CoV-2 risk were selected for inclusion in analysis on `24 April 2020`
+  
+
+***
+
+(3.01.01) Step 1: Reading in reference codes and associated metadata for the selected indicators from `20200417 Publically available data.csv` 
+```{r 3.01.01A, echo = FALSE, eval = TRUE}
+#Reading in CSV
+filename.indicators <- "20200425 Publically available data.csv"
+df.indicators <- read.csv(file.path(mainDir, filename.indicators), stringsAsFactors = FALSE)
+#Trimming out rows without indicators (e.g. section headings)
+df.indicators <- df.indicators[df.indicators$source == 'WORLDBANK' |
+                               df.indicators$source == 'WHO_GHO'   |
+                               df.indicators$source == 'UNDP', ]
+row.names(df.indicators) <- 1:nrow(df.indicators)
+```
+
+Table 3.01.01: Initial selected indicators
+```{r 3.01.01B, echo = FALSE, eval = TRUE}
+kable(df.indicators, caption = "Reference codes and variable descriptions for selected indicators") %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"), font_size = 8) %>% 
+  scroll_box(width = "100%", height = "300px")
+```
+
+
+(3.01.02) Step 2: Defining `function.retrieve_indicator_data` to wrap together the functions defined below
+```{r 3.01.02, echo = FALSE, eval = FALSE}
+#Inputting 1 row of the df.indicators dataframe at a time
+#Returning a list of data frames (list length will be > 1 when WHO data sets are dis-aggregated into multiple data frames)
+function.retrieve_indicator_data <- function(df.indicator_i){
+  
+  source_df.indicator_i <- as.character(df.indicator_i$source)
+  
+  l.output = list()
+  
+  if (source_df.indicator_i == "WHO_GHO"){
+    l.output <- df.indicator_i %>% function.download_url %>% function.who.get_raw_csv %>% function.who.clean1 %>% function.who.clean2
+  } else if (source_df.indicator_i == "WORLDBANK"){
+    l.output <- df.indicator_i %>% function.download_url %>% function.wbk.get_raw_csv %>% function.wbk.clean
+  } else if (source_df.indicator_i == "UNDP"){
+    l.output <- df.indicator_i %>% function.undp.get_raw_csv %>% function.undp.clean
+  } else {
+    l.output <- list()
+  }
+
+  return(l.output)
+}
+```
+
+
+(3.01.03) Step 3: Generating the `download_URL` needed for downloading the data
+```{r 3.01.03, echo = FALSE, eval = FALSE}
+function.download_url <- function(df.indicator_i){
+  source_df.indicator_i         <- as.character(df.indicator_i$source)
+  reference_code_df.indicator_i <- as.character(df.indicator_i$reference_code)
+
+  c.download_URL <- NA
+  df.output = data.frame()
+  
+  if (source_df.indicator_i == "WHO_GHO"){
+    c.download_URL <- paste("https://apps.who.int/gho/athena/api/GHO/",  
+                          reference_code_df.indicator_i, "?format=csv", 
+                          sep = "")
+  } else if (source_df.indicator_i == "WORLDBANK"){
+    c.download_URL <- paste("http://api.worldbank.org/v2/en/indicator/", 
+                          reference_code_df.indicator_i, 
+                          "?downloadformat=csv", 
+                          sep = "")
+  } else if (df.indicator_i$source == "UNDP"){
+    c.download_URL <- NA
+  } else {
+    c.download_URL <- NA
+  }
+  
+  df.output_i <- data.frame(df.indicator_i, download_URL = rep(c.download_URL, length(df.indicator_i$reference_code)))
+  return(df.output_i)
+}
+```
+
+***
+
+(3.01.04) Step 4: Downloading a raw CSV for a WHO GHO indicator
+```{r 3.01.04, echo = FALSE, eval = FALSE}
+#Input: The 1 row data frame generated in step 3
+#Output: Raw CSV file
+
+#Read in CSV for a WHO GHO indicator
+function.who.get_raw_csv <- function(df.who.indicator_i){
+  v.download_url <- paste0(as.character(df.who.indicator_i$download_URL))
+  df.who.raw_csv <- read.csv(url(v.download_url), stringsAsFactors = FALSE)
+
+  return(df.who.raw_csv)
+}
+```
+
+
+(3.01.05) Step 5: Downloading a raw CSV for a WORLDBANK indicator
+```{r 3.01.05, echo = FALSE, eval = FALSE}
+#Input: The 1 row data frame generated in step 3
+#Output: Raw CSV file
+
+#Read in CSV for a WORLDBANK indicator
+function.wbk.get_raw_csv <- function(df.wbk.indicator_i){
+  v.download_url <- paste0(as.character(df.wbk.indicator_i$download_URL))
+  #Creating a temporary directory
+  td = tempdir()
+  #Creating the placeholder file
+  tf = tempfile(tmpdir=td, fileext=".zip")
+  #Downloading into the placeholder file
+  download.file(v.download_url, tf)
+  #Getting the name of the second file in the WORLDBANK zip archive (assuming data is always second file)
+  fname = unzip(tf, list=TRUE)$Name[2]
+  #Unzipping the file to the temporary directory
+  unzip(tf, files=fname, exdir=td, overwrite=TRUE)
+  #fpath is the full path to the extracted file
+  fpath = file.path(td, fname)
+  #Reading the csv, skipping the first 4 rows (don't contain data)
+  df.wbk.raw_csv = read.csv(fpath, header=TRUE, row.names=NULL, stringsAsFactors=FALSE, skip = 4, check.names=FALSE)
+  #Cleaning up column names
+  names(df.wbk.raw_csv) <- gsub(" ", "_", names(df.wbk.raw_csv))
+  #Unlinking aka deleting temp dirs and files
+  unlink(td)
+  unlink(tf)
+
+  return(df.wbk.raw_csv)
+}
+```
+
+
+(3.01.06) Step 6: Downloading a raw CSV for a UNDP indicator
+```{r 3.01.06, echo = FALSE, eval = FALSE}
+#Input: The 1 row data frame generated in step 3
+#Output: Raw CSV file
+
+#First, globally defining a dataframe with aliases, reference_codes and file_names for UNDP indicators (manually)
+df.file_names.undp <- data.frame(
+  alias          = c("2_6_wash_attr_mort_p100k",
+                     "3_2_mdpi_attr_to_health_p"),
+  reference_code = c("174606",
+                     "117906"),
+  file_name      = c("Mortality rate attributed to unsafe water, sanitation and hygiene services (per 100,000 population).csv",
+                     "MPI 2019_ Contribution of Health.csv"))
+
+
+#Read in CSV for a WORLDBANK indicator
+function.undp.get_raw_csv <- function(df.undp.indicator_i){
+  reference_code_i <- as.character(df.undp.indicator_i$reference_code)
+ 
+  file_name.undp.indicator_i <- df.file_names.undp[df.file_names.undp$reference_code == reference_code_i, 3]
+  
+  #Reading in CSV
+  df.undp.raw_csv <- read.csv(file.path(mainDir, as.character(file_name.undp.indicator_i)), 
+                              header=TRUE, row.names=NULL, stringsAsFactors=FALSE, check.names=TRUE)
+  #Cleaning up column names
+  names(df.undp.raw_csv) <- sub("^X20", "20", names(df.undp.raw_csv))
+  df.undp.raw_csv        <- df.undp.raw_csv[, -grep("^X", names(df.undp.raw_csv))]
+  
+  #Appending the reference code as a column
+  df.undp.raw_csv <- df.undp.raw_csv %>% mutate(reference_code = rep(reference_code_i, length(df.undp.raw_csv$Country)))
+
+  return(df.undp.raw_csv)
+}
+```
+
+***
+
+(3.01.07) Step 7: Cleaning up a raw WHO GHO indicator CSV
+
+Note: Due peculiarities and inconsistencies in the way WHO data is stored, some cleaning steps have to be manually specified for certain indicators
+
+Necessary columns to keep (initially): 
+
+1. `GHO` -> `reference_code`
+2. `YEAR` -> then keep `YEAR_recent`
+3. `COUNTRY` -> `COUNTRY_CODE`
+4. `Numeric` -> contains data, `value`
+
+Deleting columns, if present: 
+
+- `DATASOURCE`, `PUBLISHSTATE`, `REGION`, `Display.Value`, `Low`, `High`, `Comments`, 
+- `WORLDBANKINCOMEGROUP`, `UNREGION`, `EDUCATIONLEVEL`, `WEALTHQUINTILE`, `DHSMICSREGION`
+
+Columns used to re-aggregrate data when needed:
+
+- `SEX`
+- `RESIDENCEAREATYPE`
+
+Columns used to dis-aggregrate data when needed:
+
+- `GHECAUSES`: [Causes listed by WHO](https://apps.who.int/gho/data/node.metadata.GHECAUSES?lang=en)
+- `ENVCAUSE`:  [Causes listed by WHO](https://apps.who.int/gho/data/node.metadata.ENVCAUSE?lang=en)
+- `RESIDENCEAREATYPE`: Rural, urban, or all combined
+
+***
+
+| GHECAUSES_CODE | GHECAUSES_LABEL                       | ENVCAUSE_CODE | ENVCAUSE_LABEL                 |
+| -------------- | ------------------------------------- | ------------- | ------------------------------ |
+| GHE038         | Respiratory infections                | ENVCAUSE068   | Trachea, bronchus, lung cancers|
+| GHE060         | Noncommunicable diseases              | ENVCAUSE113   | Ischaemic heart disease        |
+| GHE118         | Chronic obstructive pulmonary disease |               |                                |
+| GHE119         | Asthma                                |               |                                |
+| GHE120         | Other respiratory diseases            |               |                                |
+
+***
+
+Outputting a list of dataframes with standardized columns:
+
+1. `alias`
+2. `reference_code`
+3. `REGION_CODE`
+4. `COUNTRY_NAME` (standardized country names with special characters removed)
+5. `COUNTRY_NAME_UNDP` (country names following UNDP, trickier to work with)
+6. `COUNTRY_CODE`
+7. `YEAR_recent`
+8. `value`
+
+***
+
+`function.who.clean1` : begin cleaning by standardizing columns
+```{r 3.01.07A, echo = FALSE, eval = FALSE}
+function.who.clean1 <- function(df.who.raw_csv.in){
+
+  df.who.p_clean <- df.who.raw_csv.in
+  
+  #Deleting unnecessary columns
+if("DATASOURCE"          %in%colnames(df.who.p_clean)){df.who.p_clean<-subset(df.who.p_clean,select=-DATASOURCE    )}
+if("PUBLISHSTATE"        %in%colnames(df.who.p_clean)){df.who.p_clean<-subset(df.who.p_clean,select=-PUBLISHSTATE  )}
+if("REGION"              %in%colnames(df.who.p_clean)){df.who.p_clean<-subset(df.who.p_clean,select=-REGION        )}
+if("Low"                 %in%colnames(df.who.p_clean)){df.who.p_clean<-subset(df.who.p_clean,select=-Low           )}
+if("High"                %in%colnames(df.who.p_clean)){df.who.p_clean<-subset(df.who.p_clean,select=-High          )}
+if("Comments"            %in%colnames(df.who.p_clean)){df.who.p_clean<-subset(df.who.p_clean,select=-Comments      )}
+if("UNREGION"            %in%colnames(df.who.p_clean)){df.who.p_clean<-subset(df.who.p_clean,select=-UNREGION      )}
+if("EDUCATIONLEVEL"      %in%colnames(df.who.p_clean)){df.who.p_clean<-subset(df.who.p_clean,select=-EDUCATIONLEVEL)}
+if("WEALTHQUINTILE"      %in%colnames(df.who.p_clean)){df.who.p_clean<-subset(df.who.p_clean,select=-WEALTHQUINTILE)}
+if("DHSMICSGEOREGION"    %in%colnames(df.who.p_clean)){df.who.p_clean<-subset(df.who.p_clean,select=-DHSMICSGEOREGION)}
+if("WORLDBANKINCOMEGROUP"%in%colnames(df.who.p_clean)){df.who.p_clean<-subset(df.who.p_clean,select=-WORLDBANKINCOMEGROUP)}
+  #Deleting any columns that are entirely NAs
+  df.who.p_clean <- df.who.p_clean %>% select_if(function(x) any(!is.na(x)))
+
+  #Standardizing column names
+  colnames(df.who.p_clean)[which(names(df.who.p_clean) == "GHO")]     <- "reference_code"
+  colnames(df.who.p_clean)[which(names(df.who.p_clean) == "COUNTRY")] <- "COUNTRY_CODE"
+  colnames(df.who.p_clean)[which(names(df.who.p_clean) == "Numeric")] <- "value"
+  
+  return(df.who.p_clean)
+}
+```
+
+
+`function.who.clean2` : clean up re- and dis-aggregation issues and problem columns
+```{r 3.01.07B, echo = FALSE, eval = FALSE}
+function.who.clean2 <- function(df.who.raw_csv.in){
+  
+  #Separating data sets that require additional processing steps
+  v.1A.avg_sex                <- c("carep", "vfull")
+  v.1B.reagg_sex              <- c("BP_04", "NCD_BMI_25A", "NCD_GLUC_04", "SDGTOBACCO", "WHOSIS_000007")
+  v.2A.parse_disp_val         <- c("CHOL_02")
+  v.2B.convert_cat            <- c("RS_239")
+  v.3A.disagg_by_GHE_cause    <- c("WHS2_131")
+  v.3B.disagg_by_ENV_cause    <- c("SDGAIRBODA")
+  v.3C.disagg_by_rur_urb_totl <- c("SDGPM25", "WSH_HYGIENE_BASIC")
+  v.4A.no_problems            <- c("ANEMIANPW", "DEVICES00", "DEVICES02", "DEVICES05", "DEVICES08", 
+                                  "DEVICES09", "GHED_CHE_pc_US_SHA2011",  "GHED_OOPSCHE_SHA2011", 
+                                  "HRH_43", "HWF_0019", "HWF_0020", "SDGMALARIA", "SI_POV_DAY1", "WHS3_62")
+  
+  df.who.clean <- df.who.raw_csv.in
+  
+  #Creating a list to hold the clean output data frames
+  l.who.clean   <- list()
+  #Creating a list to hold the partially clean parsed data frames
+  l.who.clean_p <- list()
+  
+  #(1A) For indicators where no both sex category is specified
+  #     Indicators: "carep", "vfull"
+  #     Re-aggregating by finding only the population avg (mean of males and females)
+  if(df.who.clean$reference_code[1] %in% v.1A.avg_sex){
+    #Keeping only the rows corresponding to disaggregation by sex
+    df.who.clean1a <- df.who.clean[df.who.clean$SEX == "MLE" | df.who.clean$SEX == "FMLE", ]
+    #Taking the mean across sexes
+    df.who.clean1a <- df.who.clean1a %>% group_by(COUNTRY_CODE, YEAR) %>%
+      mutate(value = mean(value))
+    #Storing parsed date frame as an element in l.who.clean_p
+    l.who.clean_p[[1]] <- df.who.clean1a
+  }
+  
+  #(1B)  Selecting data from both sexes when the "BTSX" category is specified:
+  #     Indicators: "NCD_BMI_25A", "BP_04", "NCD_GLUC_04", "SDGTOBACCO", "WHOSIS_000007"
+  if(df.who.clean$reference_code[1] %in% v.1B.reagg_sex){
+    #Keeping only the rows not disaggregated by sex (BTSX = both sexes combined)
+    df.who.clean1b <- df.who.clean[df.who.clean$SEX == "BTSX", ]
+    #Storing parsed date frame as an element in l.who.clean_p
+    l.who.clean_p[[1]] <- df.who.clean1b
+  }
+  
+  #(2A) Parsing problematic values (via trimming the Display.Value)
+  #     Indicators: CHOL_2 (Raised total cholesterol (>= 5.0 mmol/L) (age-standardized estimate))
+  #     Example: Display.Value "54.9 [28.2-78.2]" -> value "54.9"
+  #     Note: Also keep BTSX
+  if(df.who.clean$reference_code[1] %in% v.2A.parse_disp_val){
+    #Keeping only the rows not disaggregated by sex (BTSX = both sexes combined)
+    df.who.clean2a <- df.who.clean[df.who.clean$SEX == "BTSX", ]
+    #Deleting rows with "..." Display.Values
+    df.who.clean2a <- df.who.clean2a[df.who.clean2a$Display.Value != "...", ]
+    #Using gsub to keep only the characters before the space in for example: "54.9 [28.2-78.2]"
+    df.who.clean2a$Display.Value <- gsub(" .*$", "", df.who.clean2a$Display.Value)
+    #Adding the trimmed Display.Value to the value column
+    df.who.clean2a$value <- as.numeric(as.character(df.who.clean2a$Display.Value))
+    #Storing parsed date frame as an element in l.who.clean_p
+    l.who.clean_p[[1]] <- df.who.clean2a
+  }
+  
+  #(2B) Parsing problematic values (via converting the Display.Value to a categorical variable)
+  #     Indicators: RS_239 (Reported % of seriously injured patients transported by ambulance	)
+  #     Example: Display.Value "11-49%"
+  #     Note: Storing categories as numerical values:
+  #       "-" = NA -> delete
+  #       "<= 11%" = 11
+  #       "11-49%" = 49
+  #       "50-74%" = 74
+  #       ">= 75%"  = 90
+  #       "No ambulance services in my country" = 0
+  if(df.who.clean$reference_code[1] %in% v.2B.convert_cat){
+    #Deleting rows with "-" Display.Values, indicating no data
+    df.who.clean2b <- df.who.clean[df.who.clean$Display.Value != "-", ]
+    #Using gsub to replace with a number to represent the category
+    df.who.clean2b$Display.Value <- gsub("No ambulance services in my country", "0", df.who.clean2b$Display.Value)
+    df.who.clean2b$Display.Value <- gsub("<= 11%", "11", df.who.clean2b$Display.Value)
+    df.who.clean2b$Display.Value <- gsub("11-49%", "49", df.who.clean2b$Display.Value)
+    df.who.clean2b$Display.Value <- gsub("50-74%", "74", df.who.clean2b$Display.Value)
+    df.who.clean2b$Display.Value <- gsub(">= 75%", "90", df.who.clean2b$Display.Value)
+    #Adding the corrected Display.Value to the value column
+    df.who.clean2b$value <- as.numeric(as.character(df.who.clean2b$Display.Value))
+    #Storing parsed date frame as an element in l.who.clean_p
+    l.who.clean_p[[1]] <- df.who.clean2b
+  }
+  
+
+  #(3A) Disaggregating NCD data: Age-standardized NCD mortality rate (per 100 000 population)
+  #     Indicators: WHS2_131
+  #     Extracting causes of death: "GHE038", "GHE060", "GHE118", "GHE119", "GHE120"
+  if(df.who.clean$reference_code[1] %in%  v.3A.disagg_by_GHE_cause){
+    #Keeping only the rows not disaggregated by sex (BTSX = both sexes combined)
+    df.who.clean3a <- df.who.clean[df.who.clean$SEX == "BTSX", ]
+    #Keeping only the rows containing the selected causes of death
+    df.who.clean3a <- df.who.clean3a[df.who.clean3a$GHECAUSES %in% c("GHE038", "GHE060", "GHE118", "GHE119", "GHE120"), ]
+    #Appending cause to reference_code to allow tracking the split data frames
+    df.who.clean3a <- df.who.clean3a %>% mutate(reference_code = paste0(reference_code, "_", GHECAUSES))
+    #Splitting the dataframe by GHECAUSES
+    l.who.clean3a  <- df.who.clean3a %>% split(df.who.clean3a$GHECAUSES)
+    #Storing split date frame as an element in l.who.clean_p
+    l.who.clean_p <- l.who.clean3a
+  }
+  
+  #(3B) Disaggregating NCD and pollution data: 
+  #     Ambient and household air pollution attributable death rate (per 100 000 population, age-standardized)
+  #     Indicators: SDGAIRBODA 
+  #     Extracting environmental causes of death "ENVCAUSE068", "ENVCAUSE113"	
+  if(df.who.clean$reference_code[1] %in% v.3B.disagg_by_ENV_cause){
+    #Keeping only the rows not disaggregated by sex (BTSX = both sexes combined)
+    df.who.clean3b <- df.who.clean[df.who.clean$SEX == "BTSX", ]
+    #Keeping only the rows containing the selected causes of death
+    df.who.clean3b <- df.who.clean3b[df.who.clean3b$ENVCAUSE %in% c("ENVCAUSE068", "ENVCAUSE113"), ]
+    #Appending cause to reference_code to allow tracking the split data frames
+    df.who.clean3b <- df.who.clean3b %>% mutate(reference_code = paste0(reference_code, "_", ENVCAUSE))
+    #Splitting the dataframe by GHECAUSES
+    l.who.clean3b <- df.who.clean3b %>% split(df.who.clean3b$ENVCAUSE)
+    #Storing split date frame as an element in l.who.clean_p
+    l.who.clean_p <- l.who.clean3b
+  }
+  
+  #(3C) Disaggregating PM2.5 and handwashing data: 
+  #     Annual mean concentration of particulate matter of less than 2.5 microns of diameter (PM2.5) [ug/m3] in urban areas
+  #     Population with basic handwashing facilities at home (%)
+  #     Indicators: SDGPM25, WSH_HYGIENE_BASIC
+  #     Extracting data from urban, rural, and overall areas: RESIDENCEAREATYPE = "URB", "RUR", "TOT"	
+  if(df.who.clean$reference_code[1] %in% v.3C.disagg_by_rur_urb_totl){
+    #Appending area type to reference_code to allow tracking the split data frames
+    df.who.clean3c <- df.who.clean %>% mutate(reference_code = paste0(reference_code, "_", RESIDENCEAREATYPE))
+    #Splitting the dataframe by GHECAUSES
+    l.who.clean3c  <- df.who.clean3c %>% split(df.who.clean3c$RESIDENCEAREATYPE)
+    #Storing split date frame as an element in l.who.clean_p
+    l.who.clean_p <- l.who.clean3c
+  }
+
+  #(4A) For indicators that are simple (as in no dis or re-aggregation needed)
+  #     (ie not among the indicators specified above)
+  if(df.who.clean$reference_code[1] %in% v.4A.no_problems){
+    df.who.clean4a <- df.who.clean
+    #Storing parsed date frame as an element in l.who.clean_p
+    l.who.clean_p[[1]] <- df.who.clean4a
+  }
+  
+  #Calling function.who.clean2 to do the last few cleaning steps
+  l.who.clean <- function.who.clean2supp(l.who.clean_p)
+  
+  return(l.who.clean)
+}
+```
+
+
+`function.who.clean2supp` : called by `function.who.clean2` above to finish cleaning
+```{r 3.01.07C, echo = FALSE, eval = FALSE}
+#Writing a second function to do downstream cleaning of WHO data files
+function.who.clean2supp <- function(l.who.clean_p.in){
+  
+  l.who.clean_p <- l.who.clean_p.in
+
+  for(i in 1:length(l.who.clean_p)){
+    
+    df.clean_p <- l.who.clean_p[[i]]
+    
+    #(A1)Deleting remaining unnecessary columns
+    if("Display.Value"     %in% colnames(df.clean_p)){df.clean_p <- subset(df.clean_p,select=-Display.Value)}
+    if("AGEGROUP"          %in% colnames(df.clean_p)){df.clean_p <- subset(df.clean_p,select=-AGEGROUP)}
+    if("SEX"               %in% colnames(df.clean_p)){df.clean_p <- subset(df.clean_p,select=-SEX)}
+    if("RESIDENCEAREATYPE" %in% colnames(df.clean_p)){df.clean_p <- subset(df.clean_p,select=-RESIDENCEAREATYPE)}
+    if("ENVCAUSE"          %in% colnames(df.clean_p)){df.clean_p <- subset(df.clean_p,select=-ENVCAUSE)}
+    if("GHECUASES"         %in% colnames(df.clean_p)){df.clean_p <- subset(df.clean_p,select=-GHECUASES)}
+    #(A2) Deleting rows corresponding to multi-national regions, no longer existing countries etc
+    v.non_countries <- c("SDF", "")
+    df.clean_p <- df.clean_p[!(df.clean_p$COUNTRY_CODE %in% v.non_countries), ]
+    #(A3) Deleting rows without data (NAs)
+    df.clean_p <- df.clean_p[!is.na(df.clean_p$value), ]
+    #(B1) Only keeping rows with most recent estimates
+    df.clean_p <- df.clean_p %>% group_by(COUNTRY_CODE) %>% mutate(YEAR_recent = max(YEAR))
+    df.clean_p <- df.clean_p[df.clean_p$YEAR == df.clean_p$YEAR_recent, ]
+    #(B2) In the case of re-aggregating disaggregated data above, deleting duplicates
+    df.clean_p <- df.clean_p[!duplicated(df.clean_p$COUNTRY_CODE), ]
+    #(B3) Ungrouping
+    df.clean_p <- data.frame(df.clean_p)
+    #(B4) Deleting the original YEAR column
+    df.clean_p <- subset(df.clean_p, select=-c(YEAR))
+    #(D) Adding alias as a column by searching the global df.indicators defined in a section above
+    #(D1) If no disaggregation was necessary, add alias normally
+    #(D2) If disaggregation was necessary, adjust alias accordingly
+    if(df.clean_p$reference_code[1] %in% c("WHS2_131_GHE038", "WHS2_131_GHE060", "WHS2_131_GHE118", "WHS2_131_GHE119", "WHS2_131_GHE120",
+                                           "SDGAIRBODA_ENVCAUSE068", "SDGAIRBODA_ENVCAUSE113",
+                                           "SDGPM25_RUR", "SDGPM25_URB", "SDGPM25_TOTL",
+                                           "WSH_HYGIENE_BASIC_RUR", "WSH_HYGIENE_BASIC_URB", "WSH_HYGIENE_BASIC_TOTL")){
+      df.clean_p <- df.clean_p %>% mutate(
+        alias = case_when(
+          reference_code == "WHS2_131_GHE038"        ~ "2_2_ncd_mort_a_s_resp_infs",
+          reference_code == "WHS2_131_GHE060"        ~ "2_2_ncd_mort_a_s_NCDs_overall",
+          reference_code == "WHS2_131_GHE118"        ~ "2_2_ncd_mort_a_s_COPD",
+          reference_code == "WHS2_131_GHE119"        ~ "2_2_ncd_mort_a_s_asthma",
+          reference_code == "WHS2_131_GHE120"        ~ "2_2_ncd_mort_a_s_other_resp_d",
+          reference_code == "SDGAIRBODA_ENVCAUSE068" ~ "2_4_air_mort_a_s_lung_cancers",
+          reference_code == "SDGAIRBODA_ENVCAUSE113" ~ "2_4_air_mort_a_s_ic_heart_dis",
+          reference_code == "SDGPM25_RUR"            ~ "2_4_mean_pm25_exp_rural_areas",
+          reference_code == "SDGPM25_URB"            ~ "2_4_mean_pm25_exp_urban_areas",
+          reference_code == "SDGPM25_TOTL"           ~ "2_4_mean_pm25_exp_mean",
+          reference_code == "WSH_HYGIENE_BASIC_RUR"  ~ "2_6_p_handwashing_at_hh_rural",
+          reference_code == "WSH_HYGIENE_BASIC_URB"  ~ "2_6_p_handwashing_at_hh_urban",
+          reference_code == "WSH_HYGIENE_BASIC_TOTL" ~ "2_6_p_handwashing_at_hh_total"
+        ))
+    } else {
+      df.relevant_row  <- df.indicators[df.indicators$reference_code == df.clean_p$reference_code[1], ]
+      df.clean_p$alias <- rep(as.character(df.relevant_row$alias[1]), length(df.clean_p$reference_code))
+    }
+    #(E) Adding indicator_label as a column by searching the global df.indicators defined in a section above
+    #(E1) If no disaggregation was necessary, add indicator_label normally
+    #(E2) If disaggregation was necessary, adjust indicator_label accordingly
+    if(df.clean_p$reference_code[1] %in% c("WHS2_131_GHE038", "WHS2_131_GHE060", "WHS2_131_GHE118", "WHS2_131_GHE119", "WHS2_131_GHE120",
+                                           "SDGAIRBODA_ENVCAUSE068", "SDGAIRBODA_ENVCAUSE113",
+                                           "SDGPM25_RUR", "SDGPM25_URB", "SDGPM25_TOTL",
+                                           "WSH_HYGIENE_BASIC_RUR", "WSH_HYGIENE_BASIC_URB", "WSH_HYGIENE_BASIC_TOTL")){
+      df.clean_p <- df.clean_p %>% mutate(
+          indicator_label = case_when(
+          reference_code == "WHS2_131_GHE038"        ~ "Age-standardized mortality rate (per 100 000 popn) Respiratory infections",
+          reference_code == "WHS2_131_GHE060"        ~ "Age-standardized mortality rate (per 100 000 popn) Noncommunicable diseases overall",
+          reference_code == "WHS2_131_GHE118"        ~ "Age-standardized mortality rate (per 100 000 popn) COPD",
+          reference_code == "WHS2_131_GHE119"        ~ "Age-standardized mortality rate (per 100 000 popn) Asthma",
+          reference_code == "WHS2_131_GHE120"        ~ "Age-standardized mortality rate (per 100 000 popn) Other respiratory diseases",
+          reference_code == "SDGAIRBODA_ENVCAUSE068" ~ "Ambient and household air pollution attributable death rate (per 100 000 popn, age-standardized) Trachea, bronchus, lung cancers",
+          reference_code == "SDGAIRBODA_ENVCAUSE113" ~ "Ambient and household air pollution attributable death rate (per 100 000 popn, age-standardized) Ischaemic heart disease",
+          reference_code == "SDGPM25_RUR"            ~ "Annual mean concentration of particulate matter of less than 2.5 microns of diameter (PM2.5) [ug/m3] in urban areas Rural areas",
+          reference_code == "SDGPM25_URB"            ~ "Annual mean concentration of particulate matter of less than 2.5 microns of diameter (PM2.5) [ug/m3] in urban areas Urban areas",
+          reference_code == "SDGPM25_TOTL"           ~ "Annual mean concentration of particulate matter of less than 2.5 microns of diameter (PM2.5) [ug/m3] in urban areas Total area",
+          reference_code == "WSH_HYGIENE_BASIC_RUR"  ~ "Population with basic handwashing facilities at home (%) Rural areas",
+          reference_code == "WSH_HYGIENE_BASIC_URB"  ~ "Population with basic handwashing facilities at home (%) Urban areas",
+          reference_code == "WSH_HYGIENE_BASIC_TOTL" ~ "Population with basic handwashing facilities at home (%) Total area"
+        ))
+    } else {
+      df.relevant_row            <- df.indicators[df.indicators$reference_code == df.clean_p$reference_code[1], ]
+      df.clean_p$indicator_label <- rep(as.character(df.relevant_row$indicator_label[1]), length(df.clean_p$reference_code))
+    }
+    #(F) Ordering columns: alias, reference_code, COUNTRY_CODE, YEAR_recent, value
+    df.clean_p <- df.clean_p %>% select(alias, reference_code, indicator_label, COUNTRY_CODE, YEAR_recent, value)
+    #(G) Cleaning up country and region codes
+    df.clean_p <- function.country_reg_codes(df.clean_p)
+    #(H) Re-Ordering columns:
+    df.clean_p <- df.clean_p %>% select(alias, reference_code, indicator_label,
+                                        REGION_CODE, COUNTRY_NAME, COUNTRY_NAME_UNDP, COUNTRY_CODE, YEAR_recent, value)
+    #(I) Ordering by region and country name
+    df.clean_p <- df.clean_p[order(df.clean_p$REGION_CODE, df.clean_p$COUNTRY_NAME), ]
+    #(J) Storing the cleaned dataframe as an element in a list
+    l.who.clean_p[[i]] <- df.clean_p
+  }
+  
+  l.who.clean_p.out<- l.who.clean_p
+  
+  return(l.who.clean_p.out)
+}
+```
+
+***
+
+(3.01.08) Step 8: Cleaning up a raw WORLDBANK indicator CSV
+
+Key columns to keep (initially): 
+
+1. `Indicator_Code` -> `reference_code`
+2. Columns containing years -> melt then keep `YEAR_recent`
+3. `Country_Code` -> `COUNTRY_CODE`
+4. Data columns -> after melting and filtering, store as `value`
+
+Deleting columns: 
+
+1. `Country_Name` -> Will get replaced with `COUNTRY_NAME` from standardized list
+2. `Indicator_Name` -> Will get replaced with `alias` from standardized list
+
+Deleting rows:
+
+1. Any rows that do not have data
+2. Any rows corresponding to multi-national regions etc
+
+Outputting a list of dataframes with standardized columns:
+
+1. `alias`
+2. `reference_code`
+3. `REGION_CODE`
+4. `COUNTRY_NAME` (standardized country names with special characters removed)
+5. `COUNTRY_NAME_UNDP` (country names following UNDP, trickier to work with)
+6. `COUNTRY_CODE`
+7. `YEAR_recent`
+8. `value`
+
+***
+
+`function.wbk.clean`
+
+```{r 3.01.08, echo = FALSE, eval = FALSE}
+function.wbk.clean <- function(df.wbk.raw_csv){
+  #Deleting the Country_Name and Indicator_Name columns
+  df.wbk.clean <- subset(df.wbk.raw_csv, select=-c(Country_Name, Indicator_Name))
+  
+  l.wbk.clean <- list()
+  
+  #Deleting columns that are entirely NAs
+  df.wbk.clean <- df.wbk.clean %>% select_if(function(x) any(!is.na(x)))
+  #Standardizing column names part1
+  colnames(df.wbk.clean)[which(names(df.wbk.clean) == "Country_Code")]   <- "COUNTRY_CODE"
+  colnames(df.wbk.clean)[which(names(df.wbk.clean) == "Indicator_Code")] <- "reference_code"
+  #Melting
+  df.wbk.clean <- df.wbk.clean %>% melt(id.vars = c("COUNTRY_CODE", "reference_code"))
+  #Standardizing column names part2
+  colnames(df.wbk.clean)[which(names(df.wbk.clean) == "variable")]       <- "YEAR"
+  #Converting YEAR back to nummeric
+  df.wbk.clean$YEAR <- as.numeric(as.character(df.wbk.clean$YEAR))
+  #Deleting rows without data (value = NA)
+  df.wbk.clean <- df.wbk.clean[!is.na(df.wbk.clean$value), ]
+  #Deleting rows corresponding to multi-national regions etc
+  v.wbk_non_countries <- c(
+    "ARB", "CEB", "CHI", "CSS", "EAP", "EAR", "EAS", "ECA", "ECS", "EMU", 
+    "EUU", "FCS", "HIC", "HPC", "IBD", "IBT", "IDA", "IDB", "IDX", "INX", 
+    "LAC", "LCN", "LDC", "LIC", "LMC", "LMY", "LTE", "MEA", "MIC", "MNA", 
+    "NAC", "OED", "OSS", "PRE", "PSS", "PST", "SAS", "SSA", "SSF", "SST", 
+    "TEA", "TEC", "TLA", "TMN", "TSA", "TSS", "UMC", "WLD", "XKX")
+  df.wbk.clean <- df.wbk.clean[!(df.wbk.clean$COUNTRY_CODE %in% v.wbk_non_countries), ]
+  #Only keeping rows with the most recent estimates
+  df.wbk.clean <- df.wbk.clean %>% group_by(COUNTRY_CODE) %>% mutate(YEAR_recent = max(YEAR))
+  df.wbk.clean <- df.wbk.clean[df.wbk.clean$YEAR == df.wbk.clean$YEAR_recent, ]
+  #Ungrouping
+  df.wbk.clean <- data.frame(df.wbk.clean)
+  #Deleting the original YEAR column
+  df.wbk.clean <- subset(df.wbk.clean, select=-c(YEAR))
+  #Ordering columns: reference_code, COUNTRY_CODE, YEAR_recent, value
+  df.wbk.clean <- df.wbk.clean %>% select(reference_code, COUNTRY_CODE, YEAR_recent, value)
+  #Cleaning up country and region codes
+  df.wbk.clean <- function.country_reg_codes(df.wbk.clean)
+  #Adding alias as a column by searching the globally defined df.indicators from a section above
+  df.relevant_row  <- df.indicators[df.indicators$reference_code == df.wbk.clean$reference_code[1], ]
+  c.alias          <- as.character(df.relevant_row$alias[1])
+  df.wbk.clean$alias <-  rep(c.alias, length(df.wbk.clean$reference_code))
+  #Adding indicator_label by searching the globally defined df.indicators from a section above
+  c.indicator_label <- as.character(df.relevant_row$indicator_label[1])
+  df.wbk.clean$indicator_label <-  rep(c.indicator_label, length(df.wbk.clean$reference_code))
+  #Re-Ordering columns:
+  df.wbk.clean <- df.wbk.clean %>% select(alias, reference_code, indicator_label,
+                                            REGION_CODE, COUNTRY_NAME, COUNTRY_NAME_UNDP, COUNTRY_CODE, YEAR_recent, value)
+  #Ordering by region and country
+  df.wbk.clean <- df.wbk.clean[order(df.wbk.clean$REGION_CODE, df.wbk.clean$COUNTRY_NAME), ]
+
+  l.wbk.clean[[1]] <- df.wbk.clean
+  return(l.wbk.clean)
+}
+```
+
+***
+
+(3.01.09) Step 9: Cleaning up a raw UNDP indicator CSV
+
+Key columns to keep (initially): 
+
+1. `Country`
+2. The columns containg years' data
+3. `reference_code`
+
+Deleting columns: 
+
+1. HDI.Rank
+
+Deleting rows:
+
+1. Any rows that do not have data
+2. Any rows corresponding to multi-national regions etc
+
+Outputting a list of dataframes with standardized columns:
+
+1. `alias`
+2. `reference_code`
+3. `REGION_CODE`
+4. `COUNTRY_NAME` (standardized country names with special characters removed)
+5. `COUNTRY_NAME_UNDP` (country names following UNDP, trickier to work with)
+6. `COUNTRY_CODE`
+7. `YEAR_recent`
+8. `value`
+
+***
+
+`function.undp.clean`
+```{r 3.01.09, echo = FALSE, eval = FALSE}
+function.undp.clean <- function(df.undp.raw_csv){
+  
+  l.undp.clean <- list()
+  
+  #Removing the HDI.Rank column
+  df.undp.clean <- subset(df.undp.raw_csv, select=-c(HDI.Rank))
+  #If present, remove the "2007.2018" column
+  if("2007.2018" %in% colnames(df.undp.clean)){df.undp.clean<-subset(df.undp.clean,select=-`2007.2018`)}
+  #Deleting rows without data (e.g., the first row that has a text description of the variable)
+  df.undp.clean <- df.undp.clean[df.undp.clean$Country != "", ]
+  #Deleting rows corresponding to multi-national regions etc
+  v.undp_non_countries <- c("World", "Very high human development", "Sub-Saharan Africa", "South Asia", 
+                            "Small Island Developing States", "Regions", 
+                            "Organization for Economic Co-operation and Development", "Medium human development", 
+                            "Low human development", "Least Developed Countries", "Latin America and the Caribbean", 
+                            "Human Development", "High human development", "Europe and Central Asia", 
+                            "East Asia and the Pacific", "Developing Countries", "Arab States")
+  df.undp.clean <- df.undp.clean[!(df.undp.clean$Country %in% v.undp_non_countries), ]
+  #Deleting the space preceeding the first letter of a country name
+  df.undp.clean$Country <- sub('.', '', df.undp.clean$Country)
+  #Replacing ".." denoting missing data with NA
+  df.undp.clean[df.undp.clean == ".."] <- NA
+  #Melting
+  df.undp.clean <- df.undp.clean %>% melt(id.vars = c("Country", "reference_code"))
+  #Standardizing column names
+  colnames(df.undp.clean)[which(names(df.undp.clean) == "variable")] <- "YEAR"
+  colnames(df.undp.clean)[which(names(df.undp.clean) == "Country")]  <- "COUNTRY_NAME_UNDP"
+  #Converting YEAR to nummeric
+  df.undp.clean$YEAR <- as.numeric(as.character(df.undp.clean$YEAR))
+  #Deleting rows without data (value = NA)
+  df.undp.clean <- df.undp.clean[!is.na(df.undp.clean$value), ]
+  #Only keeping rows with the most recent estimates
+  df.undp.clean <- df.undp.clean %>% group_by(COUNTRY_NAME_UNDP) %>% mutate(YEAR_recent = max(YEAR))
+  df.undp.clean <- df.undp.clean[df.undp.clean$YEAR == df.undp.clean$YEAR_recent, ]
+  #Ungrouping
+  df.undp.clean <- data.frame(df.undp.clean)
+  #Deleting the original YEAR column
+  df.undp.clean <- subset(df.undp.clean, select=-c(YEAR))
+  #Ordering columns: reference_code, COUNTRY_NAME_UNDP, YEAR_recent, value
+  df.undp.clean <- df.undp.clean %>% select(reference_code, COUNTRY_NAME_UNDP, YEAR_recent, value)
+  #Cleaning up country and region codes
+  df.undp.clean <- function.country_reg_codes(df.undp.clean)
+  #Adding alias as a column by searching the globally defined df.indicators from a section above
+  df.relevant_row  <- df.indicators[df.indicators$reference_code == df.undp.clean$reference_code[1], ]
+  c.alias          <- as.character(df.relevant_row$alias[1])
+  df.undp.clean$alias <-  rep(c.alias, length(df.undp.clean$reference_code))
+  #Adding indicator_label by searching the globally defined df.indicators from a section above
+  c.indicator_label <- as.character(df.relevant_row$indicator_label[1])
+  df.undp.clean$indicator_label <-  rep(c.indicator_label, length(df.undp.clean$reference_code))
+  #Re-Ordering columns:
+  df.undp.clean <- df.undp.clean %>% select(alias, reference_code, indicator_label,
+                                            REGION_CODE, COUNTRY_NAME, COUNTRY_NAME_UNDP, COUNTRY_CODE, YEAR_recent, value)
+  #Ordering by region and country
+  df.undp.clean <- df.undp.clean[order(df.undp.clean$REGION_CODE, df.undp.clean$COUNTRY_NAME), ]
+
+  l.undp.clean[[1]] <- df.undp.clean
+  
+  return(l.undp.clean)
+}
+```
+
+***
+
+(3.01.10) Step 10: Cleaning up country and region codes
+
+- The 3 letter `COUNTRY_CODE` and the `COUNTRY_NAME` follow [ISO 3166](https://www.iso.org/obp/ui/#search) 
+  - Scraped from [Wikipedia](https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes) 19 April 2020
+  - All special characters removed from country names
+  
+- Grouping for region codes follows [WHO Definition of regional groupings](https://www.who.int/choice/demography/by_country/en/) with the following exceptions:
+  - Scraped 19 from WHO April 2020
+  - The WHO AFR region for Africa was sub-divided into sub-Saharan Africa following the definition of [UNDP Stats](https://unstats.un.org/unsd/methodology/m49/) 
+  - Which for some countries such as Somalia results in a different region (it being within EMR per WHO)
+  - Due to oddities in the way WHO abbrievates their codes we are using:
+    - `SSA` : Sub-Saharan Africa
+    - `EUR` : Europe
+    - `AMR` : Americas and Caribbean
+    - `EMR` : Eastern Mediterranean, North Africa, Middle East
+    - `SEA` : South and Southeast Asia
+    - `WPR` : East Asia and Western Pacific Region
+    - `NDR` : No assigned region for islands and small states or Antartica
+
+***
+
+Sub-Saharan African countries included here are:
+
+| N  | REGION_CODE | COUNTRY_NAME                     | COUNTRY_CODE |
+| -- | ----------- | -------------------------------- | ------------ |
+| 1  | `SSA `      | Angola                           | `AGO `       |
+| 2  | `SSA `      | Benin                            | `BEN `       |
+| 3  | `SSA `      | Botswana                         | `BWA `       |
+| 4  | `SSA `      | Burkina Faso                     | `BFA `       |
+| 5  | `SSA `      | Burundi                          | `BDI `       |
+| 6  | `SSA `      | Cameroon                         | `CMR `       |
+| 7  | `SSA `      | Cape Verde                       | `CPV `       |
+| 8  | `SSA `      | Central African Republic         | `CAF `       |
+| 9  | `SSA `      | Chad                             | `TCD `       |
+| 10 | `SSA `      | Comoros                          | `COM `       |
+| 11 | `SSA `      | Cote d Ivoire                    | `CIV `       |
+| 12 | `SSA `      | Democratic Republic of the Congo | `COD `       |
+| 13 | `SSA `      | Djibouti                         | `DJI `       |
+| 14 | `SSA `      | Equatorial Guinea                | `GNQ `       |
+| 15 | `SSA `      | Eritrea                          | `ERI `       |
+| 16 | `SSA `      | Eswatini                         | `SWZ `       |
+| 17 | `SSA `      | Ethiopia                         | `ETH `       |
+| 18 | `SSA `      | Gabon                            | `GAB `       |
+| 19 | `SSA `      | Gambia                           | `GMB `       |
+| 20 | `SSA `      | Ghana                            | `GHA `       |
+| 21 | `SSA `      | Guinea                           | `GIN `       |
+| 22 | `SSA `      | Guinea Bissau                    | `GNB `       |
+| 23 | `SSA `      | Kenya                            | `KEN `       |
+| 24 | `SSA `      | Lesotho                          | `LSO `       |
+| 25 | `SSA `      | Liberia                          | `LBR `       |
+| 26 | `SSA `      | Madagascar                       | `MDG `       |
+| 27 | `SSA `      | Malawi                           | `MWI `       |
+| 28 | `SSA `      | Mali                             | `MLI `       |
+| 29 | `SSA `      | Mauritania                       | `MRT `       |
+| 30 | `SSA `      | Mauritius                        | `MUS `       |
+| 31 | `SSA `      | Mozambique                       | `MOZ `       |
+| 32 | `SSA `      | Namibia                          | `NAM `       |
+| 33 | `SSA `      | Niger                            | `NER `       |
+| 34 | `SSA `      | Nigeria                          | `NGA `       |
+| 35 | `SSA `      | Republic of the Congo            | `COG `       |
+| 36 | `SSA `      | Rwanda                           | `RWA `       |
+| 37 | `SSA `      | Sao Tome and Principe            | `STP `       |
+| 38 | `SSA `      | Senegal                          | `SEN `       |
+| 39 | `SSA `      | Seychelles                       | `SYC `       |
+| 40 | `SSA `      | Sierra Leone                     | `SLE `       |
+| 41 | `SSA `      | Somalia                          | `SOM `       |
+| 42 | `SSA `      | South Africa                     | `ZAF `       |
+| 43 | `SSA `      | South Sudan                      | `SSD `       |
+| 44 | `SSA `      | Tanzania                         | `TZA `       |
+| 45 | `SSA `      | Togo                             | `TGO `       |
+| 46 | `SSA `      | Uganda                           | `UGA `       |
+| 47 | `SSA `      | Zambia                           | `ZMB `       |
+| 48 | `SSA `      | Zimbabwe                         | `ZWE `       |
+
+***
+
+`function.country_reg_codes` : A function to clean up country and region codes
+
+```{r 3.01.10, echo = FALSE, eval = FALSE}
+#Pasting a string of all coutnry names with spaces stripped
+# string_all_country_names <- "ArubaAfghanistanAngolaAnguillaÅlandAlbaniaAndorraUnitedArabEmiratesArgentinaArmeniaAmericanSamoaAntarcticaFrenchSouthernandAntarcticLandAntiguaandBarbudaAustraliaAustriaAzerbaijanBurundiBelgiumBeninSabaBurkinaFasoBangladeshBulgariaBahrainBahamasBosniaandHerzegovinaSaintBarthélemyBelarusBelizeBermudaBoliviaBrazilBarbadosBruneiBhutanBouvetIslandBotswanaCentralAfricanRepublicCanadaCocosKeelingIslandsSwitzerlandChileChinaCotedIvoireCameroonDemocraticRepublicoftheCongoRepublicoftheCongoCookIslandsColombiaComorosCapeVerdeCostaRicaCubaCuraçaoChristmasIslandCaymanIslandsCyprusCzechRepublicGermanyDjiboutiDominicaDenmarkDominicanRepublicAlgeriaEcuadorEgyptEritreaWesternSaharaSpainEstoniaEthiopiaFinlandFijiFalklandIslandsFranceFaroeIslandsFederatedStatesofMicronesiaGabonUnitedKingdomGeorgiaGuernseyGhanaGibraltarGuineaGuadeloupeGambiaGuinea-BissauEquatorialGuineaGreeceGrenadaGreenlandGuatemalaFrenchGuianaGuamGuyanaHongKongHeardIslandandMcDonaldIslandsHondurasCroatiaHaitiHungaryIndonesiaIsleofManIndiaBritishIndianOceanTerritoryIrelandIranIraqIcelandIsraelItalyJamaicaJerseyJordanJapanKazakhstanKenyaKyrgyzstanCambodiaKiribatiSaintKittsandNevisSouthKoreaKuwaitLaosLebanonLiberiaLibyaSaintLuciaLiechtensteinSriLankaLesothoLithuaniaLuxembourgLatviaMacauCollectivityofSaintMartinMoroccoMonacoMoldovaMadagascarMaldivesMexicoMarshallIslandsNorthMacedoniaMaliMaltaMyanmarMontenegroMongoliaNorthernMarianaIslandsMozambiqueMauritaniaMontserratMartiniqueMauritiusMalawiMalaysiaMayotteNamibiaNewCaledoniaNigerNorfolkIslandNigeriaNicaraguaNiueNetherlandsNorwayNepalNauruNewZealandOmanPakistanPanamaPitcairnIslandsPeruPhilippinesPalauPapuaNewGuineaPolandPuertoRicoNorthKoreaPortugalParaguayPalestineFrenchPolynesiaQatarRéunionRomaniaRussiaRwandaSaudiArabiaSudanSenegalSingaporeSouthGeorgiaandtheSouthSandwichIslandsTristandaCunhaJanMayenSolomonIslandsSierraLeoneElSalvadorSanMarinoSomaliaSaintPierreandMiquelonSerbiaSouthSudanSãoToméandPríncipeSurinameSlovakiaSloveniaSwedenEswatiniSintMaartenSeychellesSyriaTurksandCaicosIslandsChadTogoThailandTajikistanTokelauTurkmenistanEastTimorTongaTrinidadandTobagoTunisiaTurkeyTuvaluTaiwanTanzaniaUgandaUkraineUnitedStatesMinorOutlyingIslandsUruguayUnitedStatesofAmericaUzbekistanHolySeeSaintVincentandtheGrenadinesVenezuelaBritishVirginIslandsUnitedStatesVirginIslandsVietnamVanuatuWallisandFutunaSamoaYemenSouthAfricaZambiaZimbabwe"
+
+# unique_chars_country_names <- sort(unique(strsplit(string_all_country_names, "")[[1]]))
+# special_chars_to_replace   <- c("-", "Å", "ã", "ç", "é", "í")
+# replace_special_chars_with <- c(" ", "A", "a", "c", "e", "i")
+#Note this was done manually and then pasted below
+
+#Cleaning up country and region codes for WHO and WORLDBANK
+function.country_reg_codes <- function(df.nearly_clean){
+  #Using manually precleaned, standardized country codes and names (deleted accents and special characters)
+  v.country_names_manual <- c("Afghanistan", "Aland", "Albania", "Algeria", "American Samoa", "Andorra", "Angola", "Anguilla", "Antarctica", "Antigua and Barbuda", "Argentina", "Armenia", "Aruba", "Australia", "Austria", "Azerbaijan", "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", "Bermuda", "Bhutan", "Bolivia", "Bosnia and Herzegovina", "Botswana", "Bouvet Island", "Brazil", "British Indian Ocean Territory", "British Virgin Islands", "Brunei", "Bulgaria", "Burkina Faso", "Burundi", "Cambodia", "Cameroon", "Canada", "Cape Verde", "Cayman Islands", "Central African Republic", "Chad", "Chile", "China", "Christmas Island", "Cocos Keeling Islands", "Collectivity of Saint Martin", "Colombia", "Comoros", "Cook Islands", "Costa Rica", "Cote d Ivoire", "Croatia", "Cuba", "Curacao", "Cyprus", "Czech Republic", "Democratic Republic of the Congo", "Denmark", "Djibouti", "Dominica", "Dominican Republic", "East Timor ", "Ecuador", "Egypt", "El Salvador", "Equatorial Guinea ", "Eritrea", "Estonia", "Eswatini", "Ethiopia", "Falkland Islands", "Faroe Islands", "Federated States of Micronesia", "Fiji", "Finland", "France", "French Guiana", "French Polynesia", "French Southern and Antarctic Land", "Gabon", "Gambia", "Georgia", "Germany", "Ghana", "Gibraltar", "Greece", "Greenland", "Grenada", "Guadeloupe", "Guam", "Guatemala", "Guernsey", "Guinea", "Guinea Bissau", "Guyana", "Haiti", "Heard Island and McDonald Islands", "Holy See", "Honduras", "Hong Kong", "Hungary", "Iceland", "India", "Indonesia", "Iran", "Iraq", "Ireland", "Isle of Man", "Israel", "Italy", "Jamaica", "Jan Mayen", "Japan", "Jersey", "Jordan", "Kazakhstan", "Kenya", "Kiribati", "Kuwait", "Kyrgyzstan", "Laos", "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya", "Liechtenstein", "Lithuania", "Luxembourg", "Macau", "Madagascar", "Malawi", "Malaysia", "Maldives", "Mali", "Malta", "Marshall Islands", "Martinique", "Mauritania", "Mauritius", "Mayotte", "Mexico", "Moldova", "Monaco", "Mongolia", "Montenegro", "Montserrat", "Morocco", "Mozambique", "Myanmar", "Namibia", "Nauru", "Nepal", "Netherlands", "New Caledonia", "New Zealand", "Nicaragua", "Niger", "Nigeria", "Niue", "Norfolk Island", "North Korea", "North Macedonia", "Northern Mariana Islands", "Norway", "Oman", "Pakistan", "Palau", "Palestine", "Panama", "Papua New Guinea", "Paraguay", "Peru", "Philippines", "Pitcairn Islands", "Poland", "Portugal", "Puerto Rico", "Qatar", "Republic of the Congo", "Reunion", "Romania", "Russia", "Rwanda", "Saba", "Saint Barthelemy", "Saint Kitts and Nevis", "Saint Lucia", "Saint Pierre and Miquelon", "Saint Vincent and the Grenadines", "Samoa", "San Marino", "Sao Tome and Principe", "Saudi Arabia", "Senegal", "Serbia", "Seychelles", "Sierra Leone", "Singapore", "Sint Maarten ", "Slovakia", "Slovenia", "Solomon Islands", "Somalia", "South Africa", "South Georgia and the South Sandwich Islands", "South Korea", "South Sudan", "Spain", "Sri Lanka", "Sudan", "Suriname", "Sweden", "Switzerland", "Syria", "Taiwan", "Tajikistan", "Tanzania", "Thailand", "Togo", "Tokelau", "Tonga", "Trinidad and Tobago ", "Tristan da Cunha", "Tunisia", "Turkey", "Turkmenistan", "Turks and Caicos Islands", "Tuvalu", "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom", "United States Minor Outlying Islands", "United States of America", "United States Virgin Islands", "Uruguay", "Uzbekistan", "Vanuatu", "Venezuela", "Vietnam", "Wallis and Futuna", "Western Sahara", "Yemen", "Zambia", "Zimbabwe")
+  
+  v.country_codes_manual <- c("AFG", "ALA", "ALB", "DZA", "ASM", "AND", "AGO", "AIA", "ATA", "ATG", 
+                              "ARG", "ARM", "ABW", "AUS", "AUT", "AZE", "BHS", "BHR", "BGD", "BRB", 
+                              "BLR", "BEL", "BLZ", "BEN", "BMU", "BTN", "BOL", "BIH", "BWA", "BVT", 
+                              "BRA", "IOT", "VGB", "BRN", "BGR", "BFA", "BDI", "KHM", "CMR", "CAN", 
+                              "CPV", "CYM", "CAF", "TCD", "CHL", "CHN", "CXR", "CCK", "MAF", "COL", 
+                              "COM", "COK", "CRI", "CIV", "HRV", "CUB", "CUW", "CYP", "CZE", "COD", 
+                              "DNK", "DJI", "DMA", "DOM", "TLS", "ECU", "EGY", "SLV", "GNQ", "ERI", 
+                              "EST", "SWZ", "ETH", "FLK", "FRO", "FSM", "FJI", "FIN", "FRA", "GUF", 
+                              "PYF", "ATF", "GAB", "GMB", "GEO", "DEU", "GHA", "GIB", "GRC", "GRL", 
+                              "GRD", "GLP", "GUM", "GTM", "GGY", "GIN", "GNB", "GUY", "HTI", "HMD", 
+                              "VAT", "HND", "HKG", "HUN", "ISL", "IND", "IDN", "IRN", "IRQ", "IRL", 
+                              "IMN", "ISR", "ITA", "JAM", "SJM", "JPN", "JEY", "JOR", "KAZ", "KEN", 
+                              "KIR", "KWT", "KGZ", "LAO", "LVA", "LBN", "LSO", "LBR", "LBY", "LIE", 
+                              "LTU", "LUX", "MAC", "MDG", "MWI", "MYS", "MDV", "MLI", "MLT", "MHL", 
+                              "MTQ", "MRT", "MUS", "MYT", "MEX", "MDA", "MCO", "MNG", "MNE", "MSR", 
+                              "MAR", "MOZ", "MMR", "NAM", "NRU", "NPL", "NLD", "NCL", "NZL", "NIC", 
+                              "NER", "NGA", "NIU", "NFK", "PRK", "MKD", "MNP", "NOR", "OMN", "PAK", 
+                              "PLW", "PSE", "PAN", "PNG", "PRY", "PER", "PHL", "PCN", "POL", "PRT", 
+                              "PRI", "QAT", "COG", "REU", "ROU", "RUS", "RWA", "BES", "BLM", "KNA", 
+                              "LCA", "SPM", "VCT", "WSM", "SMR", "STP", "SAU", "SEN", "SRB", "SYC", 
+                              "SLE", "SGP", "SXM", "SVK", "SVN", "SLB", "SOM", "ZAF", "SGS", "KOR", 
+                              "SSD", "ESP", "LKA", "SDN", "SUR", "SWE", "CHE", "SYR", "TWN", "TJK", 
+                              "TZA", "THA", "TGO", "TKL", "TON", "TTO", "SHN", "TUN", "TUR", "TKM", 
+                              "TCA", "TUV", "UGA", "UKR", "ARE", "GBR", "UMI", "USA", "VIR", "URY", 
+                              "UZB", "VUT", "VEN", "VNM", "WLF", "ESH", "YEM", "ZMB", "ZWE")
+  
+  v.region_codes_manual  <- c("EMR", "NDR", "EUR", "EMR", "WPR", "EUR", "SSA", "AMR", "NDR", "AMR", 
+                              "AMR", "EUR", "AMR", "WPR", "EUR", "EUR", "AMR", "EMR", "SEA", "AMR", 
+                              "EUR", "EUR", "AMR", "SSA", "AMR", "SEA", "AMR", "EUR", "SSA", "NDR", 
+                              "AMR", "NDR", "AMR", "WPR", "EUR", "SSA", "SSA", "WPR", "SSA", "AMR", 
+                              "SSA", "AMR", "SSA", "SSA", "AMR", "WPR", "NDR", "NDR", "NDR", "AMR", 
+                              "SSA", "WPR", "AMR", "SSA", "EUR", "AMR", "AMR", "EUR", "EUR", "SSA", 
+                              "EUR", "SSA", "AMR", "AMR", "WPR", "AMR", "EMR", "AMR", "SSA", "SSA", 
+                              "EUR", "SSA", "SSA", "NDR", "EUR", "WPR", "WPR", "EUR", "EUR", "AMR", 
+                              "WPR", "NDR", "SSA", "SSA", "EUR", "EUR", "SSA", "EUR", "EUR", "EUR", 
+                              "AMR", "AMR", "WPR", "AMR", "NDR", "SSA", "SSA", "AMR", "AMR", "NDR", 
+                              "EUR", "AMR", "WPR", "EUR", "EUR", "SEA", "SEA", "EMR", "EMR", "EUR", 
+                              "EUR", "EUR", "EUR", "AMR", "NDR", "WPR", "EUR", "EMR", "EUR", "SSA", 
+                              "WPR", "EMR", "EUR", "WPR", "EUR", "EMR", "SSA", "SSA", "EMR", "EUR", 
+                              "EUR", "EUR", "WPR", "SSA", "SSA", "WPR", "SEA", "SSA", "EUR", "WPR", 
+                              "AMR", "SSA", "SSA", "NDR", "AMR", "EUR", "EUR", "WPR", "EUR", "AMR", 
+                              "EMR", "SSA", "SEA", "SSA", "WPR", "SEA", "EUR", "WPR", "WPR", "AMR", 
+                              "SSA", "SSA", "WPR", "NDR", "SEA", "EUR", "WPR", "EUR", "EMR", "EMR", 
+                              "WPR", "EMR", "AMR", "WPR", "AMR", "AMR", "WPR", "NDR", "EUR", "EUR", 
+                              "AMR", "EMR", "SSA", "NDR", "EUR", "EUR", "SSA", "NDR", "NDR", "AMR", 
+                              "AMR", "NDR", "AMR", "WPR", "EUR", "SSA", "EMR", "SSA", "EUR", "SSA", 
+                              "SSA", "WPR", "NDR", "EUR", "EUR", "WPR", "SSA", "SSA", "NDR", "SEA", 
+                              "SSA", "EUR", "SEA", "EMR", "AMR", "EUR", "EUR", "EMR", "WPR", "EUR", 
+                              "SSA", "SEA", "SSA", "NDR", "WPR", "AMR", "NDR", "EMR", "EUR", "EUR", 
+                              "AMR", "WPR", "SSA", "EUR", "EMR", "EUR", "NDR", "AMR", "AMR", "AMR", 
+                              "EUR", "WPR", "AMR", "WPR", "NDR", "EMR", "EMR", "SSA", "SSA")
+  
+  #Pasting the UNDP country names
+  v.country_names_unclean_UNDP <- c("Afghanistan", NA, "Albania", "Algeria", NA, "Andorra", "Angola", NA, NA, "Antigua and Barbuda", "Argentina", "Armenia", NA, "Australia", "Austria", "Azerbaijan", "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", NA, "Bhutan", "Bolivia (Plurinational State of)", "Bosnia and Herzegovina", "Botswana", NA, "Brazil", NA, NA, "Brunei Darussalam", "Bulgaria", "Burkina Faso", "Burundi", "Cambodia", "Cameroon", "Canada", "Cabo Verde", NA, "Central African Republic", "Chad", "Chile", "China", NA, NA, NA, "Colombia", "Comoros", NA, "Costa Rica", "Côte d'Ivoire", "Croatia", "Cuba", NA, "Cyprus", "Czechia", "Congo (Democratic Republic of the)", "Denmark", "Djibouti", "Dominica", "Dominican Republic", "Timor-Leste", "Ecuador", "Egypt", "El Salvador", "Equatorial Guinea", "Eritrea", "Estonia", "Eswatini (Kingdom of)", "Ethiopia", NA, NA, "Micronesia (Federated States of)", "Fiji", "Finland", "France", NA, NA, NA, "Gabon", "Gambia", "Georgia", "Germany", "Ghana", NA, "Greece", NA, "Grenada", NA, NA, "Guatemala", NA, "Guinea", "Guinea-Bissau", "Guyana", "Haiti", NA, NA, "Honduras", "Hong Kong, China (SAR)", "Hungary", "Iceland", "India", "Indonesia", "Iran (Islamic Republic of)", "Iraq", "Ireland", NA, "Israel", "Italy", "Jamaica", NA, "Japan", NA, "Jordan", "Kazakhstan", "Kenya", "Kiribati", "Kuwait", "Kyrgyzstan", "Lao People's Democratic Republic", "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya", "Liechtenstein", "Lithuania", "Luxembourg", NA, "Madagascar", "Malawi", "Malaysia", "Maldives", "Mali", "Malta", "Marshall Islands", NA, "Mauritania", "Mauritius", NA, "Mexico", "Moldova (Republic of)", NA, "Mongolia", "Montenegro", NA, "Morocco", "Mozambique", "Myanmar", "Namibia", NA, "Nepal", "Netherlands", NA, "New Zealand", "Nicaragua", "Niger", "Nigeria", NA, NA, "Korea (Democratic People's Rep. of)", "North Macedonia", NA, "Norway", "Oman", "Pakistan", "Palau", "Palestine, State of", "Panama", "Papua New Guinea", "Paraguay", "Peru", "Philippines", NA, "Poland", "Portugal", NA, "Qatar", "Congo", NA, "Romania", "Russian Federation", "Rwanda", NA, NA, "Saint Kitts and Nevis", "Saint Lucia", NA, "Saint Vincent and the Grenadines", "Samoa", NA, "Sao Tome and Principe", "Saudi Arabia", "Senegal", "Serbia", "Seychelles", "Sierra Leone", "Singapore", NA, "Slovakia", "Slovenia", "Solomon Islands", "Somalia", "South Africa", NA, "Korea (Republic of)", "South Sudan", "Spain", "Sri Lanka", "Sudan", "Suriname", "Sweden", "Switzerland", "Syrian Arab Republic", NA, "Tajikistan", "Tanzania (United Republic of)", "Thailand", "Togo", NA, "Tonga", "Trinidad and Tobago", NA, "Tunisia", "Turkey", "Turkmenistan", NA, NA, "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom", NA, "United States", NA, "Uruguay", "Uzbekistan", "Vanuatu", "Venezuela (Bolivarian Republic of)", "Viet Nam", NA, NA, "Yemen", "Zambia", "Zimbabwe")
+  
+  #Adding country codes and country names to a data frame and taking care of factor issues
+  df.country_codes_names <- data.frame(
+    REGION_CODE       = v.region_codes_manual,
+    COUNTRY_CODE      = v.country_codes_manual, 
+    COUNTRY_NAME      = v.country_names_manual,
+    COUNTRY_NAME_UNDP = v.country_names_unclean_UNDP)
+  df.country_codes_names$REGION_CODE       <- as.character(df.country_codes_names$REGION_CODE)
+  df.country_codes_names$COUNTRY_CODE      <- as.character(df.country_codes_names$COUNTRY_CODE)
+  df.country_codes_names$COUNTRY_NAME      <- as.character(df.country_codes_names$COUNTRY_NAME)
+  df.country_codes_names$COUNTRY_NAME_UNDP <- as.character(df.country_codes_names$COUNTRY_NAME_UNDP)
+
+  #Joining the reference list of country codes and names to the downloaded WHO, World Bank, UNDP data
+  #Distinguishing GHO and WBK data by their having a pre-cleaned COUTNRY_CODE
+  if("COUNTRY_CODE" %in% colnames(df.nearly_clean)){
+    df.joined <- full_join(df.country_codes_names, df.nearly_clean, by = "COUNTRY_CODE")
+  }
+  #Distinguishing UNDP data by it having a uncleaned country names
+  if("COUNTRY_NAME_UNDP" %in% colnames(df.nearly_clean)){
+    #Search the reference (df.country_codes_names) to find the corresponding codes
+    v.COUNTRY_CODE <- rep(NA, length(df.nearly_clean$COUNTRY_NAME_UNDP))
+    for(i in 1:length(df.nearly_clean$COUNTRY_NAME_UNDP)){
+      relevant_row <- df.country_codes_names[which(df.country_codes_names$COUNTRY_NAME_UNDP == df.nearly_clean$COUNTRY_NAME_UNDP[i]), ]
+      v.COUNTRY_CODE[i] <- as.character(relevant_row$COUNTRY_CODE[1])
+    }
+    #Add COUNTRY_CODE as a column
+    df.nearly_clean <- df.nearly_clean %>% mutate(
+      COUNTRY_CODE = v.COUNTRY_CODE)
+    #Before joining, remove COUNTRY_NAME_UNDP (so not duplicated)
+    df.nearly_clean <- df.nearly_clean %>% select(COUNTRY_CODE, reference_code, YEAR_recent, value)
+    df.joined <- full_join(df.country_codes_names, df.nearly_clean, by = "COUNTRY_CODE")
+  }
+  
+  #Removing rows corresponding to countries without data
+  df.trimmed <- df.joined[!is.na(df.joined$value), ]
+
+  df.country_cleaned <- df.trimmed
+  return(df.country_cleaned)
+}
+```
+
+***
+
+(3.01.11) Step 11: Combining all indicators into one bound data frame
+
+- Adding neater, shorter indicator labels for prettier plotting later
+
+```{r 3.01.11A, echo = FALSE, eval = FALSE}
+#Combining data sets into one bound dataframe
+function.bind_indicators <- function(v.indicators_to_bind){
+  l.to_bind <- list()
+  for(i in  1:length(v.indicators_to_bind)){
+    list_i <- list()
+    list_i <- function.retrieve_indicator_data(
+      df.indicators[df.indicators$reference_code == v.indicators_to_bind[i], ])
+    df_i <- do.call(rbind, list_i)
+    l.to_bind[[i]] <- df_i
+  }
+  df.clean.indicators <- do.call(rbind, l.to_bind)
+  rownames(df.clean.indicators) <- NULL
+  df.clean.indicators <- df.clean.indicators %>% mutate(
+    indicator_label_standard = case_when(
+      alias == "1_1_physicians_p1k"            ~ "Physicians per 100 000 popn",          #rescale
+      alias == "1_1_num_anaesthesiologists"    ~ "Num anaesthesiologists",
+      alias == "1_1_surgical_workforce_p100k"  ~ "Surgeons per 100 000 popn",
+      alias == "1_1_nurses_midwives_p1k"       ~ "Nurses and midwives per 100 000 popn", #rescale
+      alias == "1_1_chws_p1k"                  ~ "CHWs per 1000 popn",
+      alias == "1_2_health_centers_p100k"      ~ "Health centers per 100 000 popn",
+      alias == "1_2_hospitals_p100k"           ~ "Hospitals per 100 000 popn", 
+      alias == "1_2_special_hospitals_p100k"   ~ "Spec hospitals per 100 000 popn",
+      alias == "1_2_hospital_beds_p1k"         ~ "Hospital beds 100 000 popn",           #rescale
+      alias == "1_2_p_ambulance"               ~ "% injured patients transported by ambulance",
+      alias == "1_3_num_lab_scientists"        ~ "Num laboratory scientists",
+      alias == "1_3_num_lab_techs"             ~ "Num laboratory techs",
+      alias == "1_3_ct_machines_p_million"     ~ "CTs per million popn",
+      alias == "1_3_mri_machines_p_million"    ~ "MRIs per million popn",
+      alias == "1_4_p_pneum_care_access"       ~ "% Children with pneumonia symptoms taken to health facility",
+      alias == "1_4_surgical_proc_p100k"       ~ "Num surgical proc per 100 000 popn",
+      alias == "1_4_p_complete_of_death_reg"   ~ "% completeness of death registration",
+      alias == "1_4_p_vacc_measles"            ~ "% measles immunization",
+      alias == "1_4_p_full_vacc_1yos"          ~ "% Full immunization coverage among 1yos",
+      alias == "1_4_p_births_att_by_skill"     ~ "% Births attended by skilled staff",
+      alias == "2_1_inc_tuberculosis_p100k"    ~ "TB incidence per 100 000 popn",
+      alias == "2_1_inc_malaria_p1k_at_risk"   ~ "Malaria incidence per 1000 popn at risk",
+      alias == "2_1_prev_hiv_15_49_yos"        ~ "% HIV prevalence among ages 15-49",
+      alias == "2_1_num_measles_cases"         ~ "Measles numb of reported cases 2018",
+      alias == "2_2_ncd_mort_a_s_resp_infs"    ~ "Resp inf mortality per 100 000 popn, age-standardized",
+      alias == "2_2_ncd_mort_a_s_NCDs_overall" ~ "NCDs overall mortality per 100 000 popn, age-standardized",
+      alias == "2_2_ncd_mort_a_s_COPD"         ~ "COPD mortality per 100 000 popn, age-standardized",
+      alias == "2_2_ncd_mort_a_s_asthma"       ~ "Asthma mort per 100 000 popn, age-standardized",
+      alias == "2_2_ncd_mort_a_s_other_resp_d" ~ "Other resp dis mort per 100 000 popn, age-standardized",
+      alias == "2_2_prev_diabetes_20_79yos"    ~ "% Diabetes prevalence among ages 20-79",
+      alias == "2_3_prev_anaemia_npws"         ~ "% Anemia prevalence among NPW",
+      alias == "2_3_prev_anaemia_5yos"         ~ "% Anemia prevalence among under 5yos",
+      alias == "2_3_prev_undernourishment"     ~ "% Undernourishment prevalence",
+      alias == "2_3_prev_overwt_bmi25_age_st"  ~ "% Overweight prevalence among adults, age-standardized",
+      alias == "2_3_raised_bp_age_st"          ~ "% Raised blood pressure prevalence, age-standardized",
+      alias == "2_3_raised_chol_age_st"        ~ "% Raised cholesterol prevalence, age-standardized",
+      alias == "2_3_raised_gluc_age_st"        ~ "% Raised glucose prevalence, age-standardized",
+      alias == "2_4_mean_pm25_exp_rural_areas" ~ "Annual mean PM2.5 concentration ug/m3 in rural areas",
+      alias == "2_4_mean_pm25_exp_urban_areas" ~ "Annual mean PM2.5 concentration ug/m3 in urban areas",
+      alias == "2_4_mean_pm25_exp_mean"        ~ "Annual mean PM2.5 concentration ug/m3 total",
+      alias == "2_4_air_mort_a_s_lung_cancers" ~ "Lung cancer air pollution mortality per 100 000 popn, age-standardized",
+      alias == "2_4_air_mort_a_s_ic_heart_dis" ~ "Heart disease air pollution mortality per 100 000 popn, age-standardized",
+      alias == "2_5_prev_smoking_age_st"       ~ "% tobacco smoking, age-standardized",
+      alias == "2_6_p_handwashing_at_hh_rural" ~ "% Rural popn with handwashing facilities at home",
+      alias == "2_6_p_handwashing_at_hh_urban" ~ "% Urban popn with handwashing facilities at home",
+      alias == "2_6_p_handwashing_at_hh_total" ~ "% Total popn with handwashing facilities at home",
+      alias == "2_6_wash_attr_mort_p100k"      ~ "WASH attributable mortality per 100 000 population",
+      alias == "3_1_hale_age_60"               ~ "Healthy life expectancy (HALE) at 60 (in years)",
+      alias == "3_2_health_exp_che_per_cap"    ~ "Health expenditure per capita in USD",
+      alias == "3_2_mdpi_attr_to_health_p"     ~ "% MDPI attr to health dimension",
+      alias == "3_2_oop_exp_vs_che_p"          ~ "% Health expenditures that are out-of-pocket",
+      alias == "3_2_p_popn_below_pov_line"     ~ "% of Popn below poverty line",
+      alias == "3_2_p_access_elec"             ~ "% of Popn with access to electricity",
+      alias == "3_2_p_urb_popn_in_slums"       ~ "% of Urban popn living in slums"
+      )
+  )
+  df.clean.indicators <- df.clean.indicators %>% mutate(
+    value = case_when(
+      alias == "1_1_physicians_p1k"      ~ as.numeric(as.character(value)) * 100, 
+      alias == "1_1_nurses_midwives_p1k" ~ as.numeric(as.character(value)) * 100,
+      alias == "1_2_hospital_beds_p1k"   ~ as.numeric(as.character(value)) * 100,
+      TRUE ~ as.numeric(as.character(value))
+    )
+  )
+  df.clean.indicators <- df.clean.indicators %>% mutate(
+    indicator_label = case_when(
+      alias == "1_1_physicians_p1k"      ~ "Physicians (per 100,000 people)",      
+      alias == "1_1_nurses_midwives_p1k" ~ "Nurses and midwives (per 100,000 people)",
+      alias == "1_2_hospital_beds_p1k"   ~ "Hospital beds (per 100,000 people)",
+      TRUE ~ as.character(indicator_label)
+      )
+  )
+  df.clean.indicators <- df.clean.indicators %>% mutate(
+    alias = case_when(
+      reference_code == "SH.MED.PHYS.ZS" ~ "1_1_physicians_p100k",
+      reference_code == "SH.MED.NUMW.P3" ~ "1_1_nurses_midwives_p100k",
+      reference_code == "SH.MED.BEDS.ZS" ~ "1_2_hospital_beds_p100k",
+      TRUE ~ as.character(alias)
+      )
+  )
+  df.clean.indicators <- df.clean.indicators %>% select("alias", "indicator_label_standard", "reference_code", "REGION_CODE",
+                                                        "COUNTRY_NAME", "COUNTRY_NAME_UNDP", "COUNTRY_CODE", "YEAR_recent", "value")
+  df.clean.indicators$value <- as.numeric(as.character(df.clean.indicators$value))
+  return(df.clean.indicators)
+}
+```
+
+- Calling `function.bind_indicators`
+
+```{r 3.01.11B, echo = FALSE, eval = FALSE}
+#Combining all indicators into one larger dataframe
+v.indicators_to_bind <- df.indicators$reference_code
+df.all_indicators_bound <- function.bind_indicators(v.indicators_to_bind)
+```
+
+
+(3.01.12) Step 12: If needed, writing cleaned datasets to csvs
+
+```{r 3.01.12, echo = FALSE, eval = FALSE}
+#Note, need to specify and manually create the destination directory: e.g., 2020_04_26_DATA
+#Writing the single combined data frame to a CSV file
+# todays_date             <- "2020_04_26"
+# dated.path_out          <- paste0(mainDir, todays_date, "_DATA/")
+# filename.all_indicators_bound <- paste0(dated.path_out, "ALL_", todays_date, "_bound_all_WHO_WBK_UNDP_indicators.csv")
+# write.csv(df.all_indicators_bound, filename.all_indicators_bound, row.names=FALSE)
+#Splitting the single combined data frame and saving each indicator to a separate CSV
+# l.all_indicators_bound <- df.all_indicators_bound %>% split(df.all_indicators_bound$alias)
+#for(i in 1:length(l.all_indicators_bound)){
+#  temp.df.all_indicators_bound <- l.all_indicators_bound[[i]]
+#  alias.indicator_i <- unique(temp.df.all_indicators_bound$alias)
+#  filename.indicator_i <- paste0(dated.path_out, alias.indicator_i, ".csv")
+#  write.csv(temp.df.all_indicators_bound, filename.indicator_i, row.names=FALSE)
+#}
+```
+
+
+(3.01.13) Step 13: If available, read in a csv containing the cleaned dataset
+```{r 3.01.13, echo = FALSE, eval = TRUE}
+#Reading in CSV
+filename.pre_cleaned_data <- "ALL_2020_04_26_bound_all_WHO_WBK_UNDP_indicators.csv"
+df.all.indicators <- read.csv(file.path(mainDir, filename.pre_cleaned_data), stringsAsFactors = FALSE)
+#Cleaning up row names
+row.names(df.all.indicators) <- 1:nrow(df.all.indicators)
+#Manually cleaning up "% of Popn below poverty line",
+#Note, due to errors in WHO database, can't download some indicators as of 27 April 2020
+df.all.indicators <- df.all.indicators %>% mutate(
+  indicator_label_standard = case_when(
+    indicator_label_standard == "% of Popn below poverty" ~ "% of Popn below poverty line",
+    TRUE ~ indicator_label_standard
+  )
+)
+```
+
+
+
+***
+
+<style>
+div.blue { background-color:#e6f0ff; border-radius: 5px; padding: 20px;}
+</style>
+<div class = "blue">
+
+### Section 4 | Visualizing the WHO - World Bank - UNDP data
+
+</div>
+
+***
+
+
+
+
+***
+
+
+##### (4.01) Previewing the global data: Grouping by geographic region
+
+Figure 4.01.01: Preview of the `handwashing` data: Population with basic handwashing facilities at home (%)
+```{r 4.01.01A, echo = FALSE, eval = TRUE, fig.height = 7, fig.width = 10}
+#Writing a function to format the data, order within geographic regions, and return a plot object
+function.plot.by_region <- function(data){
+  
+  data <- data[data$value >= 0, ]
+  
+  data$REGION_CODE <- factor(data$REGION_CODE, levels = c("SSA", "AMR", "EMR", "EUR", "SEA", "WPR"))
+  data <- data[order(data$REGION_CODE, data$value), ]
+  data <- data.frame(data, order_for_plotting = 1:length(data$COUNTRY_CODE))
+  
+  data.xlab <- paste0(data$indicator_label_standard[1], " (n = ", length(data$value), " countries)")
+  
+  p <- ggplot(data, aes(fill=REGION_CODE, y=value, x=order_for_plotting)) + 
+  geom_bar(position="dodge", stat="identity") + 
+  scale_fill_viridis_d(option="cividis", guide = guide_legend()) +
+  geom_text(aes(label = COUNTRY_NAME),
+    angle    = 90,
+    position = position_dodge(width = 0.9),
+    hjust    = -0.05,
+    size     = 1.3
+  ) + 
+  xlab(data.xlab) + 
+  theme(legend.position="bottom", legend.direction="vertical",
+        panel.grid = element_blank(),
+        axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+        axis.title.y = element_blank(),
+        panel.background = element_rect(fill = "white")
+        )
+  
+  return(p)
+}
+```
+
+- Comparing rural, urban, and overall percentages
+- Note: They all closely track, select urban going forward
+
+```{r 4.01.01B, echo = FALSE, eval = TRUE, fig.height = 7, fig.width = 10}
+#Handwashing: "2_6_p_handwashing_at_hh_rural" "2_6_p_handwashing_at_hh_total" "2_6_p_handwashing_at_hh_urban"
+# sort(unique(df.all.indicators$alias))
+
+#Plotting the handwashing data
+df.all.indicators[df.all.indicators$alias == "2_6_p_handwashing_at_hh_rural", ] %>% function.plot.by_region
+df.all.indicators[df.all.indicators$alias == "2_6_p_handwashing_at_hh_urban", ] %>% function.plot.by_region
+df.all.indicators[df.all.indicators$alias == "2_6_p_handwashing_at_hh_total", ] %>% function.plot.by_region
+```
+
+***
+
+Figure 4.01.02: Preview of the `NCD_mortality` data: Age-standardized mortality rates for respiratory illness (per 100 000 population)
+
+- Note, when age standardized, COPD and especially respiratory infection mortality is high on average in Africa
+
+```{r 4.01.02, echo = FALSE, eval = TRUE, fig.height = 7, fig.width = 10}
+#NCD_mortality:
+# sort(unique(df.all.indicators$alias))
+
+#Plotting the data
+df.all.indicators[df.all.indicators$alias == "2_2_ncd_mort_a_s_COPD", ]         %>% function.plot.by_region
+df.all.indicators[df.all.indicators$alias == "2_2_ncd_mort_a_s_resp_infs", ]    %>% function.plot.by_region
+df.all.indicators[df.all.indicators$alias == "2_4_air_mort_a_s_lung_cancers", ] %>% function.plot.by_region
+```
+
+***
+
+Figure 4.01.03: Preview of the `hospital_capacity` data: Density of doctors and hospitals
+
+- Note: Special hospitals track closely with hospitals overall
+
+```{r 4.01.03, echo = FALSE, eval = TRUE, fig.height = 7, fig.width = 10}
+#hospital_capacity: 
+# sort(unique(df.all.indicators$alias))
+
+#Plotting the data
+df.all.indicators[df.all.indicators$alias == "1_2_hospital_beds_p100k", ]                                      %>%
+  function.plot.by_region
+df.all.indicators[df.all.indicators$alias == "1_2_hospitals_p100k" & df.all.indicators$value < 20, ]         %>%
+  function.plot.by_region
+df.all.indicators[df.all.indicators$alias == "1_2_special_hospitals_p100k" & df.all.indicators$value < 10, ] %>%
+  function.plot.by_region
+df.all.indicators[df.all.indicators$alias == "1_1_physicians_p100k", ]                                     %>%
+  function.plot.by_region
+```
+
+Figure 4.01.04: Using the `hospital_capacity` data as an example of the need for data cleaning
+
+- Note that in the raw data:
+  - Guinea-Bissau has nearly an order of magnitude more hospitals per capita than any other country in the world
+  - Some countries have zero hospitals
+
+```{r 4.01.04, echo = FALSE, eval = TRUE, fig.height = 5, fig.width = 10}
+df.all.indicators[df.all.indicators$alias == "1_2_hospitals_p100k", ] %>% function.plot.by_region
+```
+
+
+
+***
+
+##### (4.02) Data quality checks
+
+***
+
+Figure 4.02.01: Looking at the distribution of the year with most recent data
+
+- Dotted vertical line shows regional median; solid vertical line shows regional mean
+- Note that most data comes from 2015-2019 (median = 2016, mean = 2014.624-2014.928), though for some indicators a country's most recent estimate is from the 1970s-80s
+
+```{r 4.02.01, echo = FALSE, eval = TRUE, fig.height = 7, fig.width = 10, fig.align="center"}
+#Trimming out NDR region and 0 values, adding mean and median
+p.yr.df.all.indicators <- df.all.indicators[df.all.indicators$REGION_CODE != "NDR", ]
+p.yr.df.all.indicators$REGION_CODE <- factor(p.yr.df.all.indicators$REGION_CODE, levels = c("SSA", "AMR", "EMR", "EUR", "SEA", "WPR"))
+p.yr.df.all.indicators <- p.yr.df.all.indicators[p.yr.df.all.indicators$value > 0, ]
+p.yr.df.all.indicators <- p.yr.df.all.indicators %>% group_by(REGION_CODE) %>% mutate(
+  median.YEAR = median(YEAR_recent),
+  mean.YEAR   = mean(YEAR_recent)
+)
+
+p.yr.df.all.indicators %>% ggplot(aes(x = YEAR_recent, fill = REGION_CODE)) +
+  geom_histogram(binwidth=1) +
+  scale_fill_viridis_d(option="cividis", guide = guide_legend()) +
+  geom_vline(aes(xintercept = median.YEAR, group = REGION_CODE, colour = REGION_CODE), size=0.5, linetype="dotted") +
+  geom_vline(aes(xintercept = mean.YEAR, group = REGION_CODE, colour = REGION_CODE), size=0.2) +
+  scale_color_viridis_d(option="cividis", guide = guide_legend()) +
+  facet_grid(rows = vars(REGION_CODE)) +
+  theme(legend.position="bottom", legend.direction="vertical",
+        panel.grid = element_blank(),
+        panel.background = element_rect(fill = "white"),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(size = 5),
+        axis.text.y = element_text(size = 5)
+        )
+```
+
+***
+
+Figure 4.02.02: Looking at variation across indicators using boxplots
+
+- Note: the presence of clear outliers (likely data errors) 
+
+```{r 4.02.02A, echo = FALSE, eval = TRUE, fig.height = 15, fig.width = 6, fig.align = "center"}
+#Writing a function to generate box + jitter plots by region
+function.plot.box_by_region <- function(data){
+  
+  #Deleting problematic rows
+  data <- data[data$value >= 0, ]
+  data <- data[data$REGION_CODE != "NDR", ]
+  #Factoring
+  data$REGION_CODE <- factor(data$REGION_CODE, levels = c("SSA", "AMR", "EMR", "EUR", "SEA", "WPR"))
+  #Plotting
+  p <- data %>% ggplot(aes(x = REGION_CODE, y = value)) +
+  geom_boxplot(aes(color = REGION_CODE), alpha = 0.7, outlier.shape = NA) +
+  geom_jitter(aes(color = REGION_CODE), width = 0.15, size = 0.5) +
+  stat_boxplot(aes(color = REGION_CODE), geom = 'errorbar') + 
+  scale_color_viridis_d(option="cividis", guide = guide_legend()) +
+  facet_grid(rows = vars(indicator_label_standard), cols = vars(REGION_CODE), scales = "free") +
+  theme(legend.position = "none",
+        panel.background = element_rect(fill = "white"),
+        axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        strip.background = element_rect(fill = "white")
+        )
+  
+  return(p)
+}
+```
+
+- shown from plotting the first 5 indicators for example: `1_1_chws_p1k`, `1_1_num_anaesthesiologists`, `1_1_nurses_midwives_p100k`, `1_1_physicians_p100k`, `1_1_surgical_workforce_p100k`
+```{r 4.02.02B, echo = FALSE, eval = TRUE, fig.height = 15, fig.width = 6, fig.align = "center"}
+#Selecting some indicators to plot
+# sort(unique(p.box.df.all.indicators$alias))
+v.box.indicators_to_plot <- c("1_1_chws_p1k", "1_1_num_anaesthesiologists", "1_1_nurses_midwives_p100k", 
+                              "1_1_physicians_p100k", "1_1_surgical_workforce_p100k")
+function.plot.box_by_region(df.all.indicators[df.all.indicators$alias %in% v.box.indicators_to_plot, ])
+```
+
+***
+
+##### (4.03) Cleaning up plots for Figure 1 in manuscript
+
+Figure 4.03.01: Grouped, ranked bar charts comparing SSA and the world
+
+1. Age standardized COPD mortality (`2_2_ncd_mort_a_s_COPD`)
+2. Physicians per capita (`1_1_physicians_p100k`)
+3. Handwashing (`2_6_p_handwashing_at_hh_urban`)
+
+```{r 4.03.01, echo = FALSE, eval = TRUE, fig.height = 5, fig.width = 10}
+#(1) Bar charts
+
+#COPD
+df.all.indicators[df.all.indicators$alias == "2_2_ncd_mort_a_s_COPD", ] %>% function.plot.by_region
+#Outliers and suspicious values:
+#None
+
+#Physicians per capita
+# df.all.indicators[df.all.indicators$alias == "1_1_physicians_p100k", ] %>% function.plot.by_region
+#Outliers and suspicious values:
+#QAT = 0 physicians : deleted
+df.all.indicators[df.all.indicators$alias == "1_1_physicians_p100k" & df.all.indicators$COUNTRY_CODE != "QAT", ]  %>%
+  function.plot.by_region
+
+#Handwashing Urban
+df.all.indicators[df.all.indicators$alias == "2_6_p_handwashing_at_hh_urban", ] %>% function.plot.by_region
+#Outliers and suspicious values:
+#None
+```
+
+Figure 4.03.02: Box + Jitter plots comparing SSA and the world
+
+```{r 4.03.02, echo = FALSE, eval = TRUE, fig.height = 5, fig.width = 5, fig.align = "center"}
+#(2) Box plots
+
+#COPD
+function.plot.box_by_region(df.all.indicators[df.all.indicators$alias == "2_2_ncd_mort_a_s_COPD", ])
+#Physicians per capita
+function.plot.box_by_region(df.all.indicators[df.all.indicators$alias == "1_1_physicians_p100k" & 
+                                                df.all.indicators$COUNTRY_CODE != "QAT", ])
+#Handwashing Urban
+function.plot.box_by_region(df.all.indicators[df.all.indicators$alias == "2_6_p_handwashing_at_hh_urban", ])
+```
+
+
+##### (4.04) Looking at variation within Africa
+
+(4.04.1) Code to fill in NA rows for countries with missing data (necessary so each country gets a slot along the X axis for all indicators)
+
+```{r 4.04.01, echo = FALSE, eval = TRUE, fig.height = 7, fig.width = 10}
+function.fill_SSA_countries <- function(data){
+  #Subsetting to SSA region only
+  data <- data[data$REGION_CODE == "SSA", ]
+  #Inputting SSA country codes and names
+  v.SSA_COUNTRY_CODE <- c("AGO", "BEN", "BWA", "BFA", "BDI", "CMR", "CPV", "CAF", "TCD", "COM",
+                          "CIV", "COD", "DJI", "GNQ", "ERI", "SWZ", "ETH", "GAB", "GMB", "GHA", 
+                          "GIN", "GNB", "KEN", "LSO", "LBR", "MDG", "MWI", "MLI", "MRT", "MUS",
+                          "MOZ", "NAM", "NER", "NGA", "COG", "RWA", "STP", "SEN", "SYC", "SLE",
+                          "SOM", "ZAF", "SSD", "TZA", "TGO", "UGA", "ZMB", "ZWE")
+  v.SSA_COUNTRY_NAME <- c("Angola", "Benin", "Botswana", "Burkina Faso", "Burundi", "Cameroon", 
+                          "Cape Verde", "Central African Republic", "Chad", "Comoros", "Cote d Ivoire", 
+                          "Democratic Republic of the Congo", "Djibouti ", "Equatorial Guinea", "Eritrea", 
+                          "Eswatini", "Ethiopia", "Gabon", "Gambia", "Ghana", "Guinea", "Guinea Bissau", 
+                          "Kenya", "Lesotho", "Liberia", "Madagascar", "Malawi", "Mali", "Mauritania", 
+                          "Mauritius", "Mozambique", "Namibia", "Niger", "Nigeria", "Republic of the Congo", 
+                          "Rwanda", "Sao Tome and Principe", "Senegal", "Seychelles", "Sierra Leone", "Somalia", 
+                          "South Africa", "South Sudan", "Tanzania", "Togo", "Uganda", "Zambia", "Zimbabwe")
+  df.LH <- data.frame(COUNTRY_CODE = v.SSA_COUNTRY_CODE, v.SSA_COUNTRY_NAME, stringsAsFactors = FALSE)
+  v.indicators <- unique(data$alias)
+  list.joined <- list()
+  for(i in 1:length(v.indicators)){
+    df.RH_i <- data[data$alias == v.indicators[i], ]
+    df.joined_i <- left_join(df.LH, df.RH_i, by = "COUNTRY_CODE")
+    df.joined_i$alias                    <- rep(unique(df.RH_i$alias),                    length(df.joined_i$alias))
+    df.joined_i$reference_code           <- rep(unique(df.RH_i$reference_code),           length(df.joined_i$alias))
+    df.joined_i$indicator_label_standard <- rep(unique(df.RH_i$indicator_label_standard), length(df.joined_i$alias))
+    df.joined_i$REGION_CODE              <- rep(unique(df.RH_i$REGION_CODE),              length(df.joined_i$alias))
+    df.joined_i$COUNTRY_NAME             <- NULL
+    df.joined_i$COUNTRY_NAME_UNDP        <- NULL
+    names(df.joined_i)[names(df.joined_i) == "v.SSA_COUNTRY_NAME"] <- "COUNTRY_NAME"
+    list.joined[[i]] <- df.joined_i
+  }
+  df.fill_all_countries <- do.call(rbind, list.joined)
+  rownames(df.fill_all_countries) <- NULL
+  v.value <- df.fill_all_countries$value
+  v.value[is.na(v.value)] <- 0
+  df.fill_all_countries$value <- v.value
+  return(df.fill_all_countries)
+}
+```
+
+(4.04.2) Generating bar charts with countries in fixed positions along x axis to allow comparison vertically
+
+```{r 4.04.02, echo = FALSE, eval = TRUE, fig.height = 7, fig.width = 10}
+function.plot.by_SSA_country <- function(data, normal_color, highlight_color, country_codes_to_highlight){
+  
+  #(1) Set Country Names as factors using the full list of countries
+  data$COUNTRY_NAME <- factor(data$COUNTRY_NAME, levels = c("Angola", "Benin", "Botswana", "Burkina Faso", "Burundi",
+"Cameroon", "Cape Verde", "Central African Republic", "Chad", "Comoros", "Cote d Ivoire", "Democratic Republic of the Congo", "Djibouti ", "Equatorial Guinea", "Eritrea", "Eswatini", "Ethiopia", "Gabon", "Gambia", "Ghana", "Guinea", "Guinea Bissau", "Kenya", "Lesotho", "Liberia", "Madagascar", "Malawi", "Mali", "Mauritania", "Mauritius", "Mozambique", "Namibia", "Niger", "Nigeria", "Republic of the Congo", "Rwanda", "Sao Tome and Principe", "Senegal", "Seychelles", "Sierra Leone", "Somalia", "South Africa", "South Sudan", "Tanzania", "Togo", "Uganda", "Zambia", "Zimbabwe"))
+  #(2) Set indicator_label_standard as factors using the full list of indicators
+  data$indicator_label_standard <- factor(data$indicator_label_standard, levels = c("Physicians per 100 000 popn", "Num anaesthesiologists", "Surgeons per 100 000 popn", "Nurses and midwives per 100 000 popn", "CHWs per 1000 popn", "Health centers per 100 000 popn", "Hospitals per 100 000 popn", "Spec hospitals per 100 000 popn", "Hospital beds 100 000 popn", "% injured patients transported by ambulance", "Num laboratory scientists", "Num laboratory techs", "CTs per million popn", "MRIs per million popn", "% Children with pneumonia symptoms taken to health facility", "Num surgical proc per 100 000 popn", "% completeness of death registration", "% measles immunization", "% Full immunization coverage among 1yos", "% Births attended by skilled staff", "TB incidence per 100 000 popn", "Malaria incidence per 1000 popn at risk", "% HIV prevalence among ages 15-49", "Measles numb of reported cases 2018", "Resp inf mortality per 100 000 popn, age-standardized", "NCDs overall mortality per 100 000 popn, age-standardized", "COPD mortality per 100 000 popn, age-standardized", "Asthma mort per 100 000 popn, age-standardized", "Other resp dis mort per 100 000 popn, age-standardized", "% Diabetes prevalence among ages 20-79", "% Anemia prevalence among NPW", "% Anemia prevalence among under 5yos", "% Undernourishment prevalence", "% Overweight prevalence among adults, age-standardized", "% Raised blood pressure prevalence, age-standardized", "% Raised cholesterol prevalence, age-standardized", "% Raised glucose prevalence, age-standardized", "Annual mean PM2.5 concentration ug/m3 in rural areas", "Annual mean PM2.5 concentration ug/m3 total", "Annual mean PM2.5 concentration ug/m3 in urban areas", "Lung cancer air pollution mortality per 100 000 popn, age-standardized", "Heart disease air pollution mortality per 100 000 popn, age-standardized", "% tobacco smoking, age-standardized", "% Rural popn with handwashing facilities at home", "% Total popn with handwashing facilities at home", "% Urban popn with handwashing facilities at home", "WASH attributable mortality per 100 000 population", "Healthy life expectancy (HALE) at 60 (in years)", "Health expenditure per capita in USD", "% MDPI attr to health dimension", "% Health expenditures that are out-of-pocket", "% of Popn below poverty line", "% of Popn with access to electricity", "% of Urban popn living in slums"))
+  #(3) Order by country name
+  data <- data[order(data$alias, data$COUNTRY_NAME), ]
+  #(4) Calculate the mean per group for adding a mean line later
+  #    Only considering values greater than 0 as some NAs are represented as 0 as a placeholder for their bar slot
+  data <- data %>% group_by(alias) %>% mutate(value.mean = mean(value[value > 0]))
+  #(5) Create the plot object
+  p <- ggplot(data, aes(y=value, 
+                        x=COUNTRY_NAME, 
+                        #Highlight some countries of interest
+                        fill=factor(ifelse(COUNTRY_CODE %in% country_codes_to_highlight, "Highlighted", "Normal")))) + 
+  geom_bar(position="dodge", stat="identity") +
+  #Choosing highlighted and normal color
+  scale_fill_manual(name = "Country", values=c(highlight_color, normal_color)) + 
+  #Adding the horizontal line for the mean
+  geom_hline(aes(yintercept=value.mean, group = indicator_label_standard), color = normal_color, size=0.3, linetype="dotted") +
+  geom_text(aes(label = COUNTRY_CODE),
+    angle    = 90,
+    position = position_dodge(width = 0.9),
+    hjust    = -0.05,
+    size     = 2
+  ) +
+  facet_grid(rows = vars(indicator_label_standard), scales = "free") +
+  theme(legend.position = "none",
+        panel.grid = element_blank(),
+        axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+        strip.text.x = element_text(size = 6), strip.text.y = element_text(size = 6),
+        panel.background = element_rect(fill = "white")
+        )
+  
+  return(p)
+}
+```
+
+(4.04.03) Plotting raw data by category (means shown as dotted horizontal line, 4 countries chosen for reference)
+
+```{r 4.04.03, echo = FALSE, eval = TRUE, fig.height = 7, fig.width = 10}
+cat1.1.v.indicators <- c("1_1_chws_p1k", "1_1_num_anaesthesiologists", "1_1_nurses_midwives_p100k", "1_1_physicians_p100k", "1_1_surgical_workforce_p100k") 
+
+cat1.2.v.indicators <- c("1_2_health_centers_p100k", "1_2_hospital_beds_p100k", "1_2_hospitals_p100k", "1_2_p_ambulance", "1_2_special_hospitals_p100k")
+
+cat1.3.v.indicators <- c("1_3_ct_machines_p_million", "1_3_mri_machines_p_million", "1_3_num_lab_scientists", "1_3_num_lab_techs")
+
+cat1.4.v.indicators <- c("1_4_p_births_att_by_skill", "1_4_p_complete_of_death_reg", "1_4_p_full_vacc_1yos", "1_4_p_pneum_care_access", "1_4_p_vacc_measles", "1_4_surgical_proc_p100k")
+
+cat2.1.v.indicators <- c("2_1_inc_malaria_p1k_at_risk", "2_1_inc_tuberculosis_p100k", "2_1_num_measles_cases", "2_1_prev_hiv_15_49_yos")
+
+cat2.2.v.indicators <- c("2_2_ncd_mort_a_s_asthma", "2_2_ncd_mort_a_s_COPD", "2_2_ncd_mort_a_s_NCDs_overall", "2_2_ncd_mort_a_s_other_resp_d", "2_2_ncd_mort_a_s_resp_infs", "2_2_prev_diabetes_20_79yos")
+
+cat2.3.v.indicators <- c("2_3_prev_anaemia_5yos", "2_3_prev_anaemia_npws", "2_3_prev_overwt_bmi25_age_st", "2_3_prev_undernourishment", "2_3_raised_bp_age_st", "2_3_raised_chol_age_st", "2_3_raised_gluc_age_st")
+
+cat2.4.v.indicators <- c("2_4_air_mort_a_s_ic_heart_dis", "2_4_air_mort_a_s_lung_cancers", "2_4_mean_pm25_exp_mean", "2_4_mean_pm25_exp_rural_areas", "2_4_mean_pm25_exp_urban_areas")
+
+cat2.5.v.indicators <- c("2_5_prev_smoking_age_st")
+
+cat2.6.v.indicators <- c("2_6_p_handwashing_at_hh_rural", "2_6_p_handwashing_at_hh_total", "2_6_p_handwashing_at_hh_urban", "2_6_wash_attr_mort_p100k")
+
+cat3.1.v.indicators <- c("3_1_hale_age_60")
+
+cat3.2.v.indicators <- c("3_2_health_exp_che_per_cap", "3_2_mdpi_attr_to_health_p", "3_2_oop_exp_vs_che_p", "3_2_p_access_elec", "3_2_p_popn_below_pov_line", "3_2_p_urb_popn_in_slums")
+```
+
+***
+
+Showing two categories for example:
+
+Raw Data: Category 1.1.0.0: Health professional workforce
+
+- Note: For each category, can inspect the plots to identify extreme outliers as potential data entry errors or variables with a high proportion of missing data
+
+```{r 4.04.03A, echo = FALSE, eval = TRUE, fig.height = 15, fig.width = 10}
+function.plot.by_SSA_country(
+  data = df.all.indicators[df.all.indicators$alias %in% cat1.1.v.indicators, ] %>% function.fill_SSA_countries, 
+  normal_color = "#512e5f",
+  highlight_color = "#f7dc6f",
+  country_codes_to_highlight = c("MDG", "GAB", "SEN", "BDI")
+)
+```
+
+***
+
+Raw Data: Category 1.2.0.0: Health facility physical infrastructure capacity
+```{r 4.04.03B, echo = FALSE, eval = TRUE, fig.height = 15, fig.width = 10}
+function.plot.by_SSA_country(
+  data = df.all.indicators[df.all.indicators$alias %in% cat1.2.v.indicators, ] %>% function.fill_SSA_countries, 
+  normal_color = "#512e5f",
+  highlight_color = "#f7dc6f",
+  country_codes_to_highlight = c("MDG", "GAB", "SEN", "BDI")
+)
+```
+
+
+***
+
+(4.04.04) Data cleaning and variable exclusion notes:
+
+1. CHW data: EXCLUDE - Data missing from 20/48 countries
+2. Anaestheliogists, Surgical workforce: EXCLUDE - Hospital workforce captured elsewhere
+3. Health centers: EXCLUDE - Data missing from 14/48 countries
+4. Hospitals: FIX ERROR - GNB data error (too high to be believable) <- replaced with NA
+5. Ambulanace: EXCLUDE - Missing data, categorical scale with large bounds
+6. Special Hospitals: EXCLUDE - tracks with hospitals
+7. CT and MRI machines: EXCLUDE - Not as relevant
+8. Lab scientists, Lab techs: EXCLUDE - Not as relevant
+9. Death registration estimates: EXCLUDE - Data missing from all but 4 countries
+10. Measles vacc: EXCLUDE - Captured in full vacc coverage
+11. Surgical procedures: EXCLUDE - Data missing from all but 9 countries
+12. Malaria: EXCLUDE - weird measure - incidence per subpopn at risk?
+13. Measles: EXCLUDE - weird measure - number of cases in 2018
+14. Asthma: EXCLUDE - focus on COPD instead
+15. Other Resp Diseases: EXCLUDE - unclear category
+16. Anemia 5yos: EXCLUDE - focus on adults instead
+17. IC Heart diseas: EXCLUDE - Not as relevant
+18. PM25 exposure rural and mean - focus on urban instead
+19. Smoking: EXCLUDE - Data missing from 16/48 countries
+20. Handwashing rural and total: EXCLUDE - focus on urban instead
+21. WASH attributable mortality: EXCLUDE - captured elsewhere
+22. MDPI attributable to health: EXCLUDE - not as relevant
+23. Electricity: EXCLUDE - not as relevant
+
+***
+
+(4.04.05) Cleaning the selected subset of variables
+
+- Cleaning, calculating the percent difference from mean, percentile, and storing in a data.frame `df.SSA`
+
+```{r 4.04.05, echo = FALSE, eval = FALSE, fig.height = 7, fig.width = 10}
+#Selecting the indicators per the inclusion/exclusion notes above
+v.select_indicators <- c("1_1_nurses_midwives_p100k", "1_1_physicians_p100k", "1_2_hospital_beds_p100k", "1_2_hospitals_p100k", "1_4_p_births_att_by_skill", "1_4_p_full_vacc_1yos", "1_4_p_pneum_care_access", "2_1_inc_tuberculosis_p100k", "2_1_prev_hiv_15_49_yos", "2_2_ncd_mort_a_s_COPD", "2_2_ncd_mort_a_s_NCDs_overall", "2_2_ncd_mort_a_s_resp_infs", "2_2_prev_diabetes_20_79yos", "2_3_prev_anaemia_npws", "2_3_prev_overwt_bmi25_age_st", "2_3_prev_undernourishment", "2_3_raised_bp_age_st", "2_3_raised_chol_age_st", "2_3_raised_gluc_age_st", "2_4_air_mort_a_s_lung_cancers", "2_4_mean_pm25_exp_urban_areas", "2_6_p_handwashing_at_hh_urban", "3_1_hale_age_60", "3_2_health_exp_che_per_cap", "3_2_oop_exp_vs_che_p", "3_2_p_popn_below_pov_line", "3_2_p_urb_popn_in_slums")
+#Subsetting to sub-Saharan Africa
+df.SSA <- df.all.indicators[df.all.indicators$alias %in% v.select_indicators, ]
+df.SSA <- df.SSA[df.SSA$REGION_CODE == "SSA", ]
+#Standardizing country rows with full list
+df.SSA <- df.SSA %>% function.fill_SSA_countries
+#Cleaning Hospital data: GNB data error (value of 56.44695 is too high to be believable) <- replaced with 0
+v.fix.GNB <- df.SSA$value[df.SSA$alias == "1_2_hospitals_p100k"]
+v.fix.GNB[v.fix.GNB == 56.44695] <- 0
+df.SSA$value[df.SSA$alias == "1_2_hospitals_p100k"] <- v.fix.GNB
+#Adding a new column for percent difference from mean and percentile
+df.SSA <- df.SSA %>% group_by(alias) %>% 
+  mutate(value.mean = mean(value[value > 0])) %>% 
+  mutate(value.pct_diff = case_when(
+      value >  0 ~ ((value-value.mean)/value.mean)*100,
+      value == 0 ~ 0)
+  ) %>% 
+  mutate(
+    percentile.rank = case_when(
+      value >  0 ~ as.numeric(ntile(value, 100)),
+      value == 0 ~ NA_real_)
+  )
+#Re-ordering columns
+df.SSA <- df.SSA %>% select("alias", "indicator_label_standard", "reference_code", "REGION_CODE", "COUNTRY_CODE", "COUNTRY_NAME",  "YEAR_recent", "value", "value.mean", "value.pct_diff", "percentile.rank")
+```
+
+Heatmapping
+
+```{r 4.04.05A, echo = FALSE, eval = FALSE, fig.height = 7, fig.width = 10}
+#1 Ordering
+# Order countries from lowest to highest for: Health life expectancy (HALE) at age 60 (years) then Proportion of population below the poverty line (%)
+# Order variables by categories
+
+#2 Plot pieces
+#Legend below
+#No axis labels
+#Angle indicator labels
+
+#Facet by group
+v.group.A1 <- c("Healthy life expectancy (HALE) at 60 (in years)", "% of Popn below poverty line", "% of Urban popn living in slums")
+
+v.group.B1 <- c("NCDs overall mortality per 100 000 popn, age-standardized", "% Diabetes prevalence among ages 20-79", "% Raised glucose prevalence, age-standardized", "% Raised blood pressure prevalence, age-standardized", "% Raised cholesterol prevalence, age-standardized", "% Overweight prevalence among adults, age-standardized", "% Anemia prevalence among NPW", "% Undernourishment prevalence")
+
+v.group.B2 <- c("Annual mean PM2.5 concentration ug/m3 in urban areas", "Lung cancer air pollution mortality per 100 000 popn, age-standardized", "COPD mortality per 100 000 popn, age-standardized")
+
+v.group.B3 <- c("Resp inf mortality per 100 000 popn, age-standardized", "TB incidence per 100 000 popn", "% HIV prevalence among ages 15-49")
+
+v.group.D1 <- c("% Urban popn with handwashing facilities at home", "Nurses and midwives per 100 000 popn", "Physicians per 100 000 popn", "Hospitals per 100 000 popn", "Hospital beds 100 000 popn")
+
+v.group.E1 <- c("% Children with pneumonia symptoms taken to health facility", "% Births attended by skilled staff", "% Full immunization coverage among 1yos", "Health expenditure per capita in USD", "% Health expenditures that are out-of-pocket")
+
+p.heat.df.SSA <- df.SSA %>% mutate(
+  variable.group = case_when(
+    indicator_label_standard %in% v.group.A1 ~ "A) Demographic and socio-economic",
+    indicator_label_standard %in% v.group.B1 ~ "B) Comorbidities 1: NCDs",
+    indicator_label_standard %in% v.group.B2 ~ "B) Comorbidities 2: Respiratory and pollution",
+    indicator_label_standard %in% v.group.B3 ~ "B) Comorbidities 3: Infectious diseases",
+    indicator_label_standard %in% v.group.D1 ~ "D) Capacity to deploy prevention and treatments",
+    indicator_label_standard %in% v.group.E1 ~ "E) Healthcare access and coverage",
+    TRUE ~ NA_character_)) %>% 
+  group_by(COUNTRY_NAME) %>%
+  mutate(
+    rank.sort = percentile.rank[indicator_label_standard == "Healthy life expectancy (HALE) at 60 (in years)"]
+  )
+
+p.heat.df.SSA <- p.heat.df.SSA %>% arrange(variable.group, indicator_label_standard, rank.sort)
+p.heat.df.SSA$COUNTRY_NAME <- factor(p.heat.df.SSA$COUNTRY_NAME, 
+                                     levels = p.heat.df.SSA$COUNTRY_NAME[1:48])
+p.heat.df.SSA$indicator_label_standard <- factor(p.heat.df.SSA$indicator_label_standard, 
+                                     levels = c("Healthy life expectancy (HALE) at 60 (in years)", "% of Popn below poverty line", "% of Urban popn living in slums", "NCDs overall mortality per 100 000 popn, age-standardized", "% Diabetes prevalence among ages 20-79", "% Raised glucose prevalence, age-standardized", "% Raised blood pressure prevalence, age-standardized", "% Raised cholesterol prevalence, age-standardized", "% Overweight prevalence among adults, age-standardized", "% Anemia prevalence among NPW", "% Undernourishment prevalence", "Annual mean PM2.5 concentration ug/m3 in urban areas", "Lung cancer air pollution mortality per 100 000 popn, age-standardized", "COPD mortality per 100 000 popn, age-standardized", "Resp inf mortality per 100 000 popn, age-standardized", "TB incidence per 100 000 popn", "% HIV prevalence among ages 15-49", "% Urban popn with handwashing facilities at home", "Nurses and midwives per 100 000 popn", "Physicians per 100 000 popn", "Hospitals per 100 000 popn", "Hospital beds 100 000 popn", "% Children with pneumonia symptoms taken to health facility", "% Births attended by skilled staff", "% Full immunization coverage among 1yos", "Health expenditure per capita in USD", "% Health expenditures that are out-of-pocket"))
+
+#Colors: https://colorbrewer2.org/#type=diverging&scheme=RdYlBu&n=11
+mycolors <- rev(c('#a50026','#d73027','#f46d43','#fdae61','#fee090','#ffffbf','#e0f3f8','#abd9e9','#74add1','#4575b4','#313695'))
+
+ggplot(p.heat.df.SSA, aes(x = alias, y =COUNTRY_NAME, fill = percentile.rank)) + 
+  geom_tile() +
+  #scale_fill_viridis_c(option = "cividis") +
+  scale_fill_gradientn(colors = mycolors) +
+  facet_grid(cols = vars(variable.group), scales = "free_x") +
+  theme(legend.position = "right",
+        panel.grid = element_blank(),
+        axis.text.x = element_text(angle = 45, size = 5.5, hjust = 0.95),
+        axis.title.x = element_blank(), axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size = 6),
+        axis.title.y = element_blank(),
+        strip.text.x = element_text(size = 5.5), strip.text.y = element_text(size = 6),
+        panel.background = element_rect(fill = "white")
+        )
+```
+
+
+***
+
+(4.04.06) Storing as a CSV; Reading from a CSV if available
+
+- If needed, saving `df.SSA` as a CSV file `filename`
+
+```{r 4.04.06A, echo = FALSE, eval = FALSE, fig.height = 7, fig.width = 10}
+#Note, need to specify and manually create the destination directory: e.g., 2020_04_27_DATA
+# todays_date             <- "2020_04_27"
+# dated.path_out          <- paste0(mainDir, todays_date, "_DATA/")
+# filename.SSA_indicators  <- paste0(dated.path_out, "SSA_", todays_date, "_select_WHO_WBK_UNDP_indicators.csv")
+# write.csv(df.SSA, filename.SSA_indicators, row.names=FALSE)
+```
+
+```{r 4.04.06B, echo = FALSE, eval = TRUE, fig.height = 7, fig.width = 10}
+filename.df.SSA <- "SSA_2020_04_27_select_WHO_WBK_UNDP_indicators.csv"
+df.SSA <- read.csv(file.path(mainDir, filename.df.SSA), stringsAsFactors = FALSE)
+```
+
+
+(4.04.07) Creating a metadata table
+
+- Creating a `SSA_indicators_metadata` table 
+  - Columns: `alias`, `indicator_label_standard`, `reference_code`, `n_countries`, `SSA_mean.value`
+
+```{r 4.04.07A, echo = FALSE, eval = TRUE, fig.height = 7, fig.width = 10}
+SSA_select_metadata <- df.SSA %>% 
+  filter(value > 0) %>%
+  group_by(alias, indicator_label_standard, reference_code, value.mean) %>% 
+  summarize(sd          = round(sd(value), 2),
+            n_countries = length(value), 
+            min_YEAR    = min(YEAR_recent), 
+            max_YEAR    = max(YEAR_recent),
+            ) %>%
+  mutate(SSA_mean.value = round(value.mean, 2)) %>% 
+  select("alias", "indicator_label_standard", "reference_code", "n_countries", "SSA_mean.value", "sd", "min_YEAR", "max_YEAR")
+```
+
+***
+
+- Printing the metadata table as a summary:
+```{r 4.04.07B, echo = FALSE, eval = TRUE}
+kable(SSA_select_metadata, caption = "SSA: Selected variables and summary") %>% 
+  kable_styling(bootstrap_options = c("striped", "hover"), font_size = 9) %>% 
+  scroll_box(width = "100%", height = "300px")
+```
+
+
+- If needed, saving the metadata table as a CSV file `2020_04_26_SSA_indicators_metadata.csv`
+
+```{r 4.04.07C, echo = FALSE, eval = FALSE, fig.height = 7, fig.width = 10}
+#Note, need to specify and manually create the destination directory: e.g., 2020_04_26_DATA
+# todays_date       <- "2020_04_26"
+# dated.path_out    <- paste0(mainDir, todays_date, "_DATA/")
+# filename.metadata <- paste0(dated.path_out, "METADATA_", todays_date, "_SSA_select_indicators.csv")
+# write.csv(SSA_select_metadata, filename.metadata, row.names=FALSE)
+```
+
+***
+
+(4.04.08) Comparing between sub-Saharan African countries: Plotting cleaned, selected data
+
+```{r 4.04.08, echo = FALSE, eval = TRUE, fig.height = 81, fig.width = 10}
+function.plot.by_SSA_country(
+  data = df.SSA,
+  normal_color = "#117a65",
+  highlight_color = "#e59866",
+  country_codes_to_highlight = c("MDG", "GAB", "SEN", "BDI")
+)
+```
+
+***
+
+(4.04.08) Plotting percent difference from mean
+
+```{r 4.04.08A, echo = FALSE, eval = TRUE, fig.height = 7, fig.width = 10}
+function.plot.SSA_pct_diff <- function(data){
+  
+  #(1) Set Country Names as factors using the full list of countries
+  data$COUNTRY_NAME <- factor(data$COUNTRY_NAME, levels = c("Angola", "Benin", "Botswana", "Burkina Faso", "Burundi",
+"Cameroon", "Cape Verde", "Central African Republic", "Chad", "Comoros", "Cote d Ivoire", "Democratic Republic of the Congo", "Djibouti ", "Equatorial Guinea", "Eritrea", "Eswatini", "Ethiopia", "Gabon", "Gambia", "Ghana", "Guinea", "Guinea Bissau", "Kenya", "Lesotho", "Liberia", "Madagascar", "Malawi", "Mali", "Mauritania", "Mauritius", "Mozambique", "Namibia", "Niger", "Nigeria", "Republic of the Congo", "Rwanda", "Sao Tome and Principe", "Senegal", "Seychelles", "Sierra Leone", "Somalia", "South Africa", "South Sudan", "Tanzania", "Togo", "Uganda", "Zambia", "Zimbabwe"))
+  #(2) Set indicator_label_standard as factors using the full list of indicators
+  data$indicator_label_standard <- factor(data$indicator_label_standard, levels = c("Physicians per 100 000 popn", "Num anaesthesiologists", "Surgeons per 100 000 popn", "Nurses and midwives per 100 000 popn", "CHWs per 1000 popn", "Health centers per 100 000 popn", "Hospitals per 100 000 popn", "Spec hospitals per 100 000 popn", "Hospital beds 100 000 popn", "% injured patients transported by ambulance", "Num laboratory scientists", "Num laboratory techs", "CTs per million popn", "MRIs per million popn", "% Children with pneumonia symptoms taken to health facility", "Num surgical proc per 100 000 popn", "% completeness of death registration", "% measles immunization", "% Full immunization coverage among 1yos", "% Births attended by skilled staff", "TB incidence per 100 000 popn", "Malaria incidence per 1000 popn at risk", "% HIV prevalence among ages 15-49", "Measles numb of reported cases 2018", "Resp inf mortality per 100 000 popn, age-standardized", "NCDs overall mortality per 100 000 popn, age-standardized", "COPD mortality per 100 000 popn, age-standardized", "Asthma mort per 100 000 popn, age-standardized", "Other resp dis mort per 100 000 popn, age-standardized", "% Diabetes prevalence among ages 20-79", "% Anemia prevalence among NPW", "% Anemia prevalence among under 5yos", "% Undernourishment prevalence", "% Overweight prevalence among adults, age-standardized", "% Raised blood pressure prevalence, age-standardized", "% Raised cholesterol prevalence, age-standardized", "% Raised glucose prevalence, age-standardized", "Annual mean PM2.5 concentration ug/m3 in rural areas", "Annual mean PM2.5 concentration ug/m3 total", "Annual mean PM2.5 concentration ug/m3 in urban areas", "Lung cancer air pollution mortality per 100 000 popn, age-standardized", "Heart disease air pollution mortality per 100 000 popn, age-standardized", "% tobacco smoking, age-standardized", "% Rural popn with handwashing facilities at home", "% Total popn with handwashing facilities at home", "% Urban popn with handwashing facilities at home", "WASH attributable mortality per 100 000 population", "Healthy life expectancy (HALE) at 60 (in years)", "Health expenditure per capita in USD", "% MDPI attr to health dimension", "% Health expenditures that are out-of-pocket", "% of Popn below poverty line", "% of Popn with access to electricity", "% of Urban popn living in slums"))
+  #(3) Order by country name
+  data <- data[order(data$indicator_label_standard, data$COUNTRY_NAME), ]
+  #(3) Create the plot object
+  p <- ggplot(data, aes(y=value.pct_diff, x=COUNTRY_NAME)) +
+    geom_bar(position="dodge", stat="identity", fill = "#154360") +
+    geom_text(aes(label = COUNTRY_CODE, y = min(value.pct_diff)-7.5),
+              size     = 1.7) +
+  ylab("Percent difference from mean") +
+  theme(legend.position = "none",
+        panel.grid = element_blank(),
+        axis.text.x = element_text(angle = 90, hjust = 0),
+        axis.title.x = element_blank(), axis.ticks.x = element_blank(),
+        strip.text.x = element_text(size = 6), strip.text.y = element_text(size = 6),
+        panel.background = element_rect(fill = "white")
+        ) +
+  facet_grid(rows = vars(indicator_label_standard), scales = "free")
+  
+  return(p)
+}
+```
+
+
+```{r 4.04.05C, echo = FALSE, eval = TRUE, fig.height = 81, fig.width = 10}
+function.plot.SSA_pct_diff(df.SSA)
+```
+
+***
+
+(4.04.09) Comparing variables in sub-Saharan Africa
+
+```{r 4.04.09, echo = FALSE, eval = TRUE, fig.height = 5, fig.width = 10}
+function.xy.by_variable <- function(data, x.var_ind_label, y.var_ind_label, risk_quadrant){
+
+  sx.data <- data %>% dplyr::filter(indicator_label_standard == x.var_ind_label)
+  sy.data <- data %>% dplyr::filter(indicator_label_standard == y.var_ind_label)
+  df1 <- data.frame(COUNTRY_NAME = sx.data$COUNTRY_NAME, x = sx.data$value, y = sy.data$value)
+  df1 <- df1 %>% dplyr::filter(x > 0) %>% dplyr::filter(y > 0)
+  #Quadrant risk
+  x.mean <- mean(df1$x)
+  y.mean <- mean(df1$y)
+  df1 <- df1 %>% mutate(
+    x_mean_comp = x - x.mean,
+    y_mean_comp = y - y.mean) %>% mutate(r.quadrant = case_when(
+      x_mean_comp >= 0 & y_mean_comp >= 0 ~ "UR",
+      x_mean_comp <  0 & y_mean_comp >= 0 ~ "UL",
+      x_mean_comp >= 0 & y_mean_comp <  0 ~ "LR",
+      x_mean_comp <  0 & y_mean_comp <  0 ~ "LL"
+    ))
+  red.dark   <- "#7b241c"
+  red.medium <- "#cd6155"
+  red.light  <- "#e6b0aa"
+  #########################LL         #LR        #UL        #UR
+  UR.quadrant_colors <- c(red.light,  red.medium, red.medium, red.dark)
+  UL.quadrant_colors <- c(red.medium, red.light,  red.dark,   red.medium)
+  LR.quadrant_colors <- c(red.medium, red.dark,   red.light,  red.medium)
+  LL.quadrant_colors <- c(red.dark,   red.medium, red.medium, red.light)
+  
+  ifelse(risk_quadrant == "UR", r.quadrant_colors <- UR.quadrant_colors,
+         ifelse(risk_quadrant == "UL", r.quadrant_colors <- UL.quadrant_colors,
+                ifelse(risk_quadrant == "LR", r.quadrant_colors <- LR.quadrant_colors, r.quadrant_colors <- LL.quadrant_colors)))
+  
+  p <- df1 %>% ggplot(aes(x = x, y = y, color = r.quadrant)) +
+    geom_point(show.legend = FALSE, size = 1) +
+    scale_colour_manual(values = r.quadrant_colors) +
+    geom_text_repel(aes(x = x,
+                        y = y,
+                        label = COUNTRY_NAME,
+                        color = r.quadrant),
+                    show.legend = FALSE,
+                    size = 2) + 
+    geom_hline(aes(yintercept=y.mean), color = red.medium, size=0.2, linetype="dotted") +
+    geom_vline(aes(xintercept=x.mean), color = red.medium, size=0.2, linetype="dotted") +
+    xlab(x.var_ind_label) +
+    ylab(y.var_ind_label) +
+    theme_bw()
+  
+  return(p)
+}
+```
+
+***
+
+Figure 4.04.09: Using XY comparisons to identify countries at risk
+
+***
+
+A: % of Popn below poverty line
+
+```{r 4.04.09A, echo = FALSE, eval = TRUE, fig.height = 6, fig.width = 6, fig.align="center"}
+#unique(df.SSA$indicator_label_standard)
+#Defining a function to pass a set of X and Y vars
+function.pass_XY <- function(data, xvar, yvars, r.quads){
+  plist <- list()
+  for(i in 1:length(yvars)){
+    plist[[i]] <- function.xy.by_variable(data, x.var_ind_label = xvar, y.var_ind_label = yvars[i], risk_quadrant = r.quads[i])
+  }
+  return(plist)
+}
+
+lpA <- function.pass_XY(data    = df.SSA,
+                        xvar    = "% of Popn below poverty line",
+                        yvars   = c("Hospital beds 100 000 popn",
+                                    "Health expenditure per capita in USD",
+                                    "% Raised blood pressure prevalence, age-standardized",
+                                    "% Raised cholesterol prevalence, age-standardized"),
+                        r.quads = c("LR",
+                                    "LR", 
+                                    "UR",
+                                    "UR"))
+
+for(i in 1:length(lpA)){plot(lpA[[i]])}
+```
+
+***
+
+B: % of Urban popn living in slums
+
+```{r 4.04.09B, echo = FALSE, eval = TRUE, fig.height = 6, fig.width = 6, fig.align="center"}
+#unique(df.SSA$indicator_label_standard)
+lpB <- function.pass_XY(data    = df.SSA,
+                        xvar    =   "% of Urban popn living in slums",
+                        yvars   = c("% Urban popn with handwashing facilities at home",
+                                    "% Full immunization coverage among 1yos",
+                                    "TB incidence per 100 000 popn",
+                                    "COPD mortality per 100 000 popn, age-standardized"),
+                        r.quads = c("LR",
+                                    "LR", 
+                                    "UR",
+                                    "UR"))
+for(i in 1:length(lpB)){plot(lpB[[i]])}
+```
+
+
+***
+
+C: % Urban popn with handwashing facilities at home
+
+```{r 4.04.09C, echo = FALSE, eval = TRUE, fig.height = 6, fig.width = 6, fig.align="center"}
+#unique(df.SSA$indicator_label_standard)
+lpC <- function.pass_XY(data    = df.SSA,
+                        xvar    =   "% Urban popn with handwashing facilities at home",
+                        yvars   = c("Hospital beds 100 000 popn",
+                                    "COPD mortality per 100 000 popn, age-standardized",
+                                    "% Raised blood pressure prevalence, age-standardized",
+                                    "Healthy life expectancy (HALE) at 60 (in years)"),
+                        r.quads = c("LL",
+                                    "UL", 
+                                    "UL",
+                                    "LL"))
+for(i in 1:length(lpC)){plot(lpC[[i]])}
+```
+
+D: Hospital beds 100 000 popn
+
+```{r 4.04.09D, echo = FALSE, eval = TRUE, fig.height = 6, fig.width = 6, fig.align="center"}
+#unique(df.SSA$indicator_label_standard)
+lpD <- function.pass_XY(data    = df.SSA,
+                        xvar    =   "Hospital beds 100 000 popn",
+                        yvars   = c("TB incidence per 100 000 popn",
+                                    "COPD mortality per 100 000 popn, age-standardized",
+                                    "% Undernourishment prevalence",
+                                    "% Raised blood pressure prevalence, age-standardized"),
+                        r.quads = c("UL",
+                                    "UL", 
+                                    "UL",
+                                    "UL"))
+for(i in 1:length(lpD)){plot(lpD[[i]])}
+```
+***
+
+***
+***
+
+<style>
+div.blue { background-color:#e6f0ff; border-radius: 5px; padding: 20px;}
+</style>
+<div class = "blue">
+
+### Section 5 | Heatmap
+
+</div>
+
+***
+
+
+
+
+
+
+
+
+##### Notes:
+
+- Benny Rice | 2020 04 27
+- 
+- 
+
+
+
+##### (5.01) Making a heatmap
+
+```{r 5.01, echo = FALSE, eval = TRUE, fig.height = 6, fig.width = 6, fig.align="center"}
+df.SSA
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
